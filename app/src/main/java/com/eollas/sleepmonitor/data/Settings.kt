@@ -1,0 +1,61 @@
+package com.eollas.sleepmonitor.data
+
+import android.content.Context
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+private val Context.store by preferencesDataStore("settings")
+
+data class AppSettings(
+    val retentionDays: Int = 14,      // 0 = toujours
+    val audioEnabled: Boolean = true,
+    val autoStop: Boolean = true,
+    val sensitivity: Int = 1,         // 0 faible, 1 normale, 2 élevée
+    val wallpaper: String = "nuit",   // nuit, crepuscule, ocean, aurore, custom
+    val dim: Float = 0.35f,
+    val hcWrite: Boolean = true,
+)
+
+class SettingsRepo(private val ctx: Context) {
+    private object K {
+        val retention = intPreferencesKey("retention")
+        val audio = booleanPreferencesKey("audio")
+        val autoStop = booleanPreferencesKey("autoStop")
+        val sens = intPreferencesKey("sens")
+        val wallpaper = stringPreferencesKey("wallpaper")
+        val dim = floatPreferencesKey("dim")
+        val hcWrite = booleanPreferencesKey("hcWrite")
+    }
+
+    val flow: Flow<AppSettings> = ctx.store.data.map { p ->
+        val d = AppSettings()
+        AppSettings(
+            retentionDays = p[K.retention] ?: d.retentionDays,
+            audioEnabled = p[K.audio] ?: d.audioEnabled,
+            autoStop = p[K.autoStop] ?: d.autoStop,
+            sensitivity = p[K.sens] ?: d.sensitivity,
+            wallpaper = p[K.wallpaper] ?: d.wallpaper,
+            dim = p[K.dim] ?: d.dim,
+            hcWrite = p[K.hcWrite] ?: d.hcWrite,
+        )
+    }
+
+    suspend fun current() = flow.first()
+
+    private suspend fun <T> set(key: Preferences.Key<T>, v: T) { ctx.store.edit { it[key] = v } }
+    suspend fun setRetention(days: Int) = set(K.retention, days)
+    suspend fun setAudio(on: Boolean) = set(K.audio, on)
+    suspend fun setAutoStop(on: Boolean) = set(K.autoStop, on)
+    suspend fun setSensitivity(v: Int) = set(K.sens, v)
+    suspend fun setWallpaper(v: String) = set(K.wallpaper, v)
+    suspend fun setDim(v: Float) = set(K.dim, v)
+    suspend fun setHcWrite(on: Boolean) = set(K.hcWrite, on)
+}

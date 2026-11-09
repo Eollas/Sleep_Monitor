@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Croissant de lune + étoiles -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFE9DDB8"
+        android:pathData="M60,32 A22,22 0 1,0 76,66 A18,18 0 1,1 60,32 Z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M70,34 l1.5,3.5 l3.5,1.5 l-3.5,1.5 l-1.5,3.5 l-1.5,-3.5 l-3.5,-1.5 l3.5,-1.5 z" />
+    <path android:fillColor="#B3FFFFFF"
+        android:pathData="M78,48 l1,2.2 l2.2,1 l-2.2,1 l-1,2.2 l-1,-2.2 l-2.2,-1 l2.2,-1 z" />
+</vector>

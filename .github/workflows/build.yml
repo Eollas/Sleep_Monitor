@@ -1,0 +1,39 @@
+name: Compiler l'APK
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests de l'algorithme de sommeil
+        run: ./gradlew testDebugUnitTest --tests '*SleepAnalyzerTest*'
+      - name: Compiler
+        run: ./gradlew assembleRelease
+      - run: cp app/build/outputs/apk/release/app-release.apk SleepMonitor.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SleepMonitor
+          path: SleepMonitor.apk
+      # Sur main : l'APK est publié dans « Releases » (téléchargeable depuis le téléphone)
+      - name: Publier la version
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest SleepMonitor.apk \
+            --title "Sleep Monitor 1.0.${{ github.run_number }}" \
+            --notes "Télécharger SleepMonitor.apk sur le téléphone puis l'ouvrir pour installer ou mettre à jour."
