@@ -49,7 +49,9 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
   → `screenshots/`.
 - Versions : AGP 8.13, Kotlin 2.4, Compose BOM 2026.06.01 (les BOM plus récents
   exigent AGP 9 / SDK 37).
-- GitHub Actions compile l'APK à chaque push ; sur `main`, publié en Release « latest ».
+- GitHub Actions compile l'APK à chaque push ; sur `main`, publié en Release « latest »
+  (tag recréé sur le commit compilé, `--target`). Numéro de version = numéro de
+  compilation GitHub (1.0.N) ; le bouton « Mettre à jour » compare ce N.
 - Base Room v2 (migration 1→2 testée par `MigrationTest`) : ne jamais casser
   les données existantes, toujours écrire une migration.
 - Clé de signature fixe `keystore/sleepmonitor.jks` : ne pas la changer, sinon
@@ -59,6 +61,11 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 
 - Réponses courtes, aperçus (captures) appréciés.
 - Pas de PR obligatoire ici : il peut demander de pousser directement sur `main`.
+  Le travail se fait directement sur `main` (une PR n'a de sens que pour une
+  branche qui contient des commits absents de `main`).
+- Branche par défaut du dépôt : doit être `main` (Settings → General). Tant que
+  c'est `claude/nifty-curie-tk9hmj`, GitHub refuse de supprimer cette branche
+  (erreur 403), qui est vide et en retard sur `main`.
 - Rien ne doit quitter le téléphone sans son accord (pas de réseau, pas de cloud).
 
 ## Installer / mettre à jour

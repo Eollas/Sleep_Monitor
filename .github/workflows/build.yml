@@ -34,6 +34,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest SleepMonitor.apk \
+          gh release create latest SleepMonitor.apk --target "${{ github.sha }}" \
             --title "Sleep Monitor 1.0.${{ github.run_number }}" \
             --notes "Télécharger SleepMonitor.apk sur le téléphone puis l'ouvrir pour installer ou mettre à jour."
