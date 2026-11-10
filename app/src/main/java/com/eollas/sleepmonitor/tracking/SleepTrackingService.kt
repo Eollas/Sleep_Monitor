@@ -48,6 +48,16 @@ class SleepTrackingService : LifecycleService() {
 
     private val times = ArrayList<Long>()
     private val acts = ArrayList<Float>()
+    private val screens = ArrayList<Boolean>()
+    private val liveEvents = java.util.Collections.synchronizedList(ArrayList<Triple<Long, Long, Int>>())
+
+    // Écran allumé pendant la tranche en cours = la personne utilise son téléphone
+    @Volatile private var screenUsed = false
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) {
+            if (i?.action == Intent.ACTION_SCREEN_ON) screenUsed = true
+        }
+    }
     private var restGravity: FloatArray? = null
     private var tiltSince: Long? = null
 
@@ -89,6 +99,8 @@ class SleepTrackingService : LifecycleService() {
                 repo.dao.insertNight(Night(startTime = startTime, audioEnabled = withAudio))
             }
             Live.state.update { it.copy(nightId = nightId, audio = withAudio) }
+            screenUsed = getSystemService(PowerManager::class.java).isInteractive
+            registerReceiver(screenReceiver, android.content.IntentFilter(Intent.ACTION_SCREEN_ON))
             motion = MotionMonitor(this@SleepTrackingService).also { it.start() }
             if (withAudio) {
                 audio = AudioMonitor(
@@ -110,10 +122,15 @@ class SleepTrackingService : LifecycleService() {
             val m = motion ?: continue
             val act = m.takeEpoch()
             val (db, maxDb) = audio?.takeEpoch() ?: (0f to 0f)
-            withContext(Dispatchers.IO) { repo.dao.insertEpoch(Epoch(nightId, t, act, db, maxDb)) }
-            times += t; acts += act
+            val pm = getSystemService(PowerManager::class.java)
+            val screen = screenUsed || pm.isInteractive
+            screenUsed = pm.isInteractive
+            withContext(Dispatchers.IO) { repo.dao.insertEpoch(Epoch(nightId, t, act, db, maxDb, screenOn = screen)) }
+            times += t; acts += act; screens += screen
 
-            val res = SleepAnalyzer.analyze(times.toLongArray(), acts.toFloatArray(), startTime, t + SleepAnalyzer.EPOCH_MS, sensitivity)
+            val res = SleepAnalyzer.analyze(
+                times.toLongArray(), acts.toFloatArray(), startTime, t + SleepAnalyzer.EPOCH_MS, sensitivity, liveFlags(),
+            )
             val lastStage = res.stages.lastOrNull() ?: 0
             val asleep = res.onset != null && res.wake != null && res.wake >= t && lastStage != 1
             Live.state.update { it.copy(asleepSince = res.onset, asleepNow = asleep) }
@@ -124,6 +141,26 @@ class SleepTrackingService : LifecycleService() {
                 return
             }
         }
+    }
+
+    /** Indices pour l'analyse en direct (écran, paroles / bruits, ronflements). */
+    private fun liveFlags(): SleepAnalyzer.Flags {
+        val n = times.size
+        val busy = BooleanArray(n)
+        val snore = BooleanArray(n)
+        val evs = synchronized(liveEvents) { liveEvents.toList() }
+        for ((s, e, cat) in evs) {
+            val from = ((s - startTime) / SleepAnalyzer.EPOCH_MS).toInt().coerceAtLeast(0)
+            val to = ((e - startTime) / SleepAnalyzer.EPOCH_MS).toInt().coerceAtMost(n - 1)
+            for (i in from..to) {
+                when (SoundCategory.of(cat)) {
+                    SoundCategory.SPEECH, SoundCategory.NOISE -> busy[i] = true
+                    SoundCategory.SNORING, SoundCategory.APNEA -> snore[i] = true
+                    else -> {}
+                }
+            }
+        }
+        return SleepAnalyzer.Flags(BooleanArray(n) { screens[it] }, busy, snore)
     }
 
     /**
@@ -149,12 +186,14 @@ class SleepTrackingService : LifecycleService() {
     }
 
     private fun saveEvent(ev: SoundEvent, pcm: ShortArray?) {
+        liveEvents += Triple(ev.start, ev.end, ev.category)
         Live.state.update {
             when (SoundCategory.of(ev.category)) {
                 SoundCategory.SNORING -> it.copy(snoreSec = it.snoreSec + ((ev.end - ev.start) / 1000).toInt(), lastEvent = ev.label)
                 SoundCategory.SPEECH -> it.copy(talk = it.talk + 1, lastEvent = ev.label)
                 SoundCategory.COUGH -> it.copy(cough = it.cough + 1, lastEvent = ev.label)
                 SoundCategory.NOISE -> it.copy(noise = it.noise + 1, lastEvent = ev.label)
+                SoundCategory.APNEA -> it.copy(apnea = it.apnea + 1, lastEvent = ev.label)
             }
         }
         (application as SleepApp).scope.launch {
@@ -174,6 +213,7 @@ class SleepTrackingService : LifecycleService() {
         finishing = true
         val end = System.currentTimeMillis()
         val id = nightId
+        runCatching { unregisterReceiver(screenReceiver) }
         motion?.stop(); motion = null
         val app = application as SleepApp
         app.scope.launch {
@@ -198,6 +238,7 @@ class SleepTrackingService : LifecycleService() {
             if (auto) append("Réveil détecté. ")
             if (n.sleepOnset != null) append("Endormi à ${clock(n.sleepOnset)}, réveil à ${clock(n.wakeTime ?: n.endTime ?: 0)}. ")
             if (n.snoreMin > 0) append("Ronflements : ${n.snoreMin} min. ")
+            if (n.apneaCount > 0) append("Pauses respiratoires possibles : ${n.apneaCount}. ")
             append("Touchez pour voir le récapitulatif.")
         }
         val intent = Intent(this, MainActivity::class.java)
@@ -246,6 +287,7 @@ class SleepTrackingService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenReceiver) }
         motion?.stop()
         wakeLock?.let { if (it.isHeld) it.release() }
         if (!finishing && nightId != 0L) {

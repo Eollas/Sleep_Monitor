@@ -6,6 +6,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,6 +79,7 @@ fun AppRoot(vm: MainViewModel, showPrivacy: MutableState<Boolean>) {
             if (open != null) {
                 BackHandler { vm.openNight = null }
                 NightDetailScreen(vm, open, onBack = { vm.openNight = null })
+                StatusScrim()
             } else {
                 AnimatedContent(tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tab") { t ->
                     when (t) {
@@ -83,6 +89,7 @@ fun AppRoot(vm: MainViewModel, showPrivacy: MutableState<Boolean>) {
                     }
                 }
                 if (tab != Tab.SLEEP) BackHandler { tab = Tab.SLEEP }
+                StatusScrim()
                 BottomBar(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
             }
         }
@@ -139,11 +146,21 @@ fun PrivacyDialog(onDismiss: () -> Unit) {
         title = { Text("Vos données restent sur le téléphone") },
         text = {
             Text(
-                "Sleep Monitor n'a pas d'accès Internet. Les mouvements, les sons et les nuits sont " +
-                    "enregistrés uniquement dans la mémoire privée de l'application.\n\n" +
+                "Les mouvements, les sons et les nuits sont enregistrés uniquement dans la mémoire privée " +
+                    "de l'application et ne sont jamais envoyés. Internet sert seulement à vérifier les " +
+                    "mises à jour sur GitHub.\n\n" +
                     "Health Connect sert à lire le sommeil et le rythme cardiaque mesurés par Mi Fitness, " +
                     "et à y ajouter vos nuits. Health Connect est lui aussi stocké sur le téléphone.",
             )
         },
+    )
+}
+
+/** Voile sombre sous la barre d'état : le texte qui défile ne passe plus sous l'heure. */
+@Composable
+private fun StatusScrim() {
+    Box(
+        Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).padding(bottom = 0.dp)
+            .background(Brush.verticalGradient(listOf(Color(0xF00B1020), Color(0xB00B1020)))),
     )
 }

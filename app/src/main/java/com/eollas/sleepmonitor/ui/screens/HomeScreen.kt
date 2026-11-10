@@ -125,6 +125,16 @@ fun HomeScreen(vm: MainViewModel) {
                 }
             }
 
+            val upd = vm.update.release
+            if (!live.running && upd != null) {
+                Card {
+                    SettingRow("Nouvelle version ${upd.versionName}", "Vos nuits sont conservées") {
+                        val p = vm.update.progress
+                        GlassButton(if (p != null) "${(p * 100).toInt()} %" else "Mettre à jour", { vm.installUpdate() }, accent = true)
+                    }
+                }
+            }
+
             if (!live.running) {
                 val last = nights.firstOrNull()
                 if (last != null) {
@@ -177,7 +187,7 @@ fun HomeScreen(vm: MainViewModel) {
                     if (live.audio) {
                         LevelBar(live.db)
                         Text(
-                            "Ronflements ${live.snoreSec / 60} min · Paroles ${live.talk} · Toux ${live.cough} · Bruits ${live.noise}",
+                            "Ronflements ${live.snoreSec / 60} min · Pauses ${live.apnea} · Paroles ${live.talk} · Bruits ${live.noise}",
                             color = Palette.textFaint, fontSize = 12.sp,
                         )
                     }

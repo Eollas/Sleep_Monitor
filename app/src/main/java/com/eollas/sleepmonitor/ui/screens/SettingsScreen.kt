@@ -186,10 +186,13 @@ fun SettingsScreen(vm: MainViewModel) {
             }, Modifier.fillMaxWidth())
         }
 
+        UpdateCard(vm)
+
         Card(title = "Confidentialité") {
             Hint(
-                "Tout reste sur ce téléphone : l'application n'a pas l'autorisation d'accéder à Internet et " +
-                    "la sauvegarde cloud est désactivée.",
+                "Tout reste sur ce téléphone : nuits, sons et données de santé ne sont jamais envoyés. " +
+                    "Internet sert uniquement à vérifier et télécharger les mises à jour sur GitHub. " +
+                    "La sauvegarde cloud est désactivée.",
             )
             GlassButton("Effacer toutes les données", { confirm = "all" }, Modifier.fillMaxWidth())
         }
@@ -228,4 +231,30 @@ private fun ConfirmDialog(title: String, text: String, onDismiss: () -> Unit, on
         confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("Effacer") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
     )
+}
+
+@Composable
+fun UpdateCard(vm: MainViewModel) {
+    val u = vm.update
+    Card(title = "Mise à jour") {
+        val r = u.release
+        SettingRow(
+            when {
+                u.progress != null -> "Téléchargement… ${(u.progress * 100).toInt()} %"
+                r != null -> "Nouvelle version ${r.versionName} disponible"
+                u.checking -> "Vérification…"
+                u.checked && u.error == null -> "L'application est à jour"
+                else -> "Version ${BuildConfig.VERSION_NAME}"
+            },
+            if (r != null) "Version actuelle : ${BuildConfig.VERSION_NAME}. Vos nuits sont conservées." else null,
+        ) {
+            if (r != null) GlassButton("Installer", { vm.installUpdate() }, accent = true)
+            else GlassButton("Vérifier", { vm.checkUpdate() })
+        }
+        if (u.error != null) Text(u.error, color = Palette.warn, fontSize = 13.sp)
+        Hint(
+            "La première fois, Android demande d'autoriser Sleep Monitor à installer des applications : " +
+                "acceptez puis revenez toucher « Installer ».",
+        )
+    }
 }

@@ -14,7 +14,8 @@ import kotlin.math.sqrt
 
 /**
  * Écoute le micro toute la nuit. Rien n'est gardé tant que c'est calme :
- * seuls les extraits des bruits détectés sont enregistrés (fichiers privés de l'app).
+ * seuls les extraits des bruits détectés sont enregistrés (fichiers privés de l'app),
+ * puis triés le matin pour ne garder que les moments forts.
  */
 class AudioMonitor(
     private val ctx: Context,
@@ -27,8 +28,8 @@ class AudioMonitor(
     private var thread: Thread? = null
     private var classifier: SoundClassifier? = null
 
-    // Historique circulaire des 4 dernières secondes (pré-enregistrement + fenêtre d'analyse)
-    private val history = ShortArray(SR * 4)
+    // Historique circulaire (pré-enregistrement, pauses respiratoires, fenêtre d'analyse)
+    private val history = ShortArray(SR * HISTORY_S)
     private var histPos = 0
     private var histFilled = 0
     private val window = FloatArray(SoundClassifier.WINDOW)
@@ -45,6 +46,11 @@ class AudioMonitor(
     private var snoreClips = 0
     private var otherClips = 0
 
+    // Respiration : sert à repérer « ronflement → silence → reprise brusque »
+    private val snoreTimes = ArrayDeque<Long>()
+    private var lastBreath = 0L
+    private var apnea: PendingApnea? = null
+
     private class Current(
         val category: SoundCategory,
         var index: Int,
@@ -56,6 +62,8 @@ class AudioMonitor(
     )
     private var current: Current? = null
 
+    private class PendingApnea(val start: Long, val resume: Long, val peakDb: Float, val audio: ShortBuilder)
+
     fun start() {
         running = true
         thread = Thread({ loop() }, "audio").apply { start() }
@@ -66,6 +74,7 @@ class AudioMonitor(
         thread?.join(3000)
         thread = null
         closeCurrent()
+        flushApnea(force = true)
         classifier?.close()
         classifier = null
     }
@@ -129,7 +138,12 @@ class AudioMonitor(
             histPos = (histPos + 1) % history.size
         }
         histFilled = minOf(history.size, histFilled + chunk.size)
-        current?.audio?.let { if (it.size < MAX_CLIP) it.add(chunk) }
+        current?.let { c ->
+            val maxLen = if (c.category == SoundCategory.SNORING) MAX_SNORE_CLIP else MAX_CLIP
+            if (c.audio.size < maxLen) c.audio.add(chunk)
+        }
+        apnea?.audio?.add(chunk)
+        flushApnea(force = false, now = now)
 
         sinceInfer += chunk.size
         if (sinceInfer < HOP) return
@@ -139,16 +153,59 @@ class AudioMonitor(
         val peak = recentDb.maxOrNull() ?: db
         val above = peak - floor
         var detection: SoundRules.Detection? = null
+        var scores: FloatArray? = null
         val cls = classifier
         if (cls != null && above >= gate()) {
             val start = (histPos - SoundClassifier.WINDOW + history.size) % history.size
             for (i in 0 until SoundClassifier.WINDOW) window[i] = history[(start + i) % history.size] / 32768f
-            detection = runCatching { SoundRules.decide(cls.classify(window), above, sensitivity) }.getOrNull()
+            scores = runCatching { cls.classify(window) }.getOrNull()
+            detection = scores?.let { SoundRules.decide(it, above, sensitivity) }
         }
+        checkBreathing(scores, detection, above, peak, now)
         handle(detection, peak, now)
     }
 
     private fun gate() = when (sensitivity) { 0 -> 7f; 2 -> 3f; else -> 5f }
+
+    /**
+     * Pause respiratoire possible : on ronflait (au moins 3 ronflements dans la minute),
+     * puis plus aucun souffle pendant 10 à 60 s, puis une reprise brusque
+     * (halètement, reniflement fort ou ronflement bruyant).
+     */
+    private fun checkBreathing(scores: FloatArray?, d: SoundRules.Detection?, above: Float, peak: Float, now: Long) {
+        while (snoreTimes.isNotEmpty() && now - snoreTimes.first() > 90_000L) snoreTimes.removeFirst()
+        if (scores == null) return
+        val snore = d?.category == SoundCategory.SNORING
+        val breath = snore || scores[SoundRules.BREATHING] >= 0.2f ||
+            scores[SoundRules.GASP] >= 0.1f || scores[SoundRules.SNORT] >= 0.15f
+        if (!breath) return
+        val gap = now - lastBreath
+        val snoringBefore = snoreTimes.count { it in (lastBreath - 60_000L)..lastBreath } >= 3
+        val brusque = scores[SoundRules.GASP] >= 0.1f || scores[SoundRules.SNORT] >= 0.15f ||
+            (snore && above >= 12f)
+        if (lastBreath > 0 && gap in MIN_PAUSE_MS..MAX_PAUSE_MS && snoringBefore && brusque && apnea == null) {
+            // On garde 5 s avant la pause, toute la pause, et 4 s après la reprise
+            val wanted = ((gap + 5_000L) * SR / 1000).toInt().coerceAtMost(histFilled)
+            val b = ShortBuilder()
+            val from = (histPos - wanted + history.size) % history.size
+            for (i in 0 until wanted) b.add(history[(from + i) % history.size])
+            apnea = PendingApnea(lastBreath, now, peak, b)
+        }
+        if (snore) snoreTimes.addLast(now)
+        lastBreath = now
+    }
+
+    private fun flushApnea(force: Boolean, now: Long = System.currentTimeMillis()) {
+        val a = apnea ?: return
+        if (!force && now - a.resume < 4_000L) return
+        apnea = null
+        val secs = ((a.resume - a.start) / 1000).toInt()
+        val ev = SoundEvent(
+            nightId = nightId, start = a.start, end = a.resume, category = SoundCategory.APNEA.id,
+            label = "Pause respiratoire ($secs s)", confidence = 1f, peakDb = a.peakDb,
+        )
+        onEvent(ev, a.audio.toArray())
+    }
 
     private fun handle(d: SoundRules.Detection?, peak: Float, now: Long) {
         val c = current
@@ -175,9 +232,9 @@ class AudioMonitor(
         val c = current ?: return
         current = null
         val end = c.last + 1000
+        // Extraits provisoires : le tri du matin ne garde que les plus intéressants
         val keepClip = if (c.category == SoundCategory.SNORING) snoreClips++ < MAX_SNORE_CLIPS
         else otherClips++ < MAX_OTHER_CLIPS
-        // Coupe l'extrait 1,5 s après la dernière détection
         val wanted = ((end + 500 - (c.start - 1500)) * SR / 1000).toInt()
         val pcm = if (keepClip) c.audio.toArray(minOf(wanted.coerceAtLeast(SR), c.audio.size)) else null
         val ev = SoundEvent(
@@ -191,11 +248,15 @@ class AudioMonitor(
         const val SR = 16_000
         const val CHUNK = 1_600            // 0,1 s
         const val HOP = 8_000              // analyse toutes les 0,5 s
+        const val HISTORY_S = 70           // 70 s d'historique (pauses jusqu'à 60 s)
         const val MAX_CLIP = SR * 60       // extrait de 60 s au maximum
+        const val MAX_SNORE_CLIP = SR * 30 // ronflement : 30 s suffisent
         const val MAX_EVENT_MS = 5 * 60_000L
         const val END_GAP_MS = 4_000L
-        const val MAX_SNORE_CLIPS = 40
-        const val MAX_OTHER_CLIPS = 80
+        const val MIN_PAUSE_MS = 10_000L
+        const val MAX_PAUSE_MS = 60_000L
+        const val MAX_SNORE_CLIPS = 200
+        const val MAX_OTHER_CLIPS = 200
         private const val TAG = "AudioMonitor"
 
         /** Niveau approximatif en dB (calé pour un micro de téléphone). */
@@ -203,7 +264,7 @@ class AudioMonitor(
     }
 }
 
-/** Tableau extensible de échantillons audio. */
+/** Tableau extensible d'échantillons audio. */
 class ShortBuilder {
     private var data = ShortArray(SR_INIT)
     var size = 0; private set

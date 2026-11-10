@@ -19,6 +19,7 @@ import com.eollas.sleepmonitor.data.AppSettings
 import com.eollas.sleepmonitor.data.Night
 import com.eollas.sleepmonitor.data.Repository
 import com.eollas.sleepmonitor.tracking.Live
+import com.eollas.sleepmonitor.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -40,6 +41,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var clipsSize by mutableLongStateOf(0L); private set
     var resumeTick by mutableIntStateOf(0); private set
     var openNight by mutableStateOf<Long?>(null)
+    var update by mutableStateOf(UpdateUi()); private set
 
     private val wallpaperFile get() = File(getApplication<Application>().filesDir, "wallpaper.jpg")
 
@@ -47,6 +49,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             repo.recoverInterrupted()
             loadWallpaper()
+        }
+        checkUpdate()
+    }
+
+    /** Vérifie sur GitHub s'il existe une version plus récente (lecture seule). */
+    fun checkUpdate() = viewModelScope.launch {
+        update = update.copy(checking = true, error = null)
+        val r = Updater.latest()
+        update = when {
+            r == null -> update.copy(checking = false, checked = true, release = null, error = "Impossible de joindre GitHub")
+            r.versionCode > Updater.currentVersion -> update.copy(checking = false, checked = true, release = r)
+            else -> update.copy(checking = false, checked = true, release = null)
+        }
+    }
+
+    /** Télécharge puis installe la nouvelle version (les données sont conservées). */
+    fun installUpdate() {
+        val r = update.release ?: return
+        val ctx = getApplication<Application>()
+        if (!ctx.packageManager.canRequestPackageInstalls()) {
+            // Android demande d'autoriser l'app à installer des mises à jour (une seule fois)
+            ctx.startActivity(
+                android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + ctx.packageName),
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            return
+        }
+        viewModelScope.launch {
+            update = update.copy(progress = 0f, error = null)
+            runCatching {
+                val f = Updater.download(ctx, r) { p -> update = update.copy(progress = p) }
+                withContext(Dispatchers.IO) { Updater.install(ctx, f) }
+            }.onFailure { update = update.copy(progress = null, error = it.message ?: "Échec du téléchargement") }
+                .onSuccess { update = update.copy(progress = null) }
         }
     }
 
@@ -114,3 +152,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.deleteEverything(); clipsSize = 0
     }
 }
+
+data class UpdateUi(
+    val checking: Boolean = false,
+    val checked: Boolean = false,
+    val release: Updater.Release? = null,
+    val progress: Float? = null,
+    val error: String? = null,
+)

@@ -15,6 +15,7 @@ data class LiveState(
     val talk: Int = 0,
     val cough: Int = 0,
     val noise: Int = 0,
+    val apnea: Int = 0,
     val lastEvent: String? = null,
 )
 

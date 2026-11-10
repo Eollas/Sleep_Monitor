@@ -64,19 +64,25 @@ object SoundRules {
     val SPEECH = intArrayOf(0, 1, 2, 3, 4, 6, 7, 9, 11, 12, 13, 15, 18, 19, 20, 21, 22, 23, 32, 33, 34)
     val COUGH = intArrayOf(42, 43, 44)
 
-    /** Bruits de fond continus ou mouvements du lit : jamais signalés comme perturbants. */
-    val IGNORED: Set<Int> = buildSet {
-        addAll(listOf(36, 37, 39, 40, 45, 46, 47, 48, 56, 59, 60, 279, 290, 400, 401, 402, 406, 407))
-        addAll(listOf(470, 471, 481, 482, 485, 490, 494, 495, 496, 499))
-        addAll(500..517)
-        add(520)
-    }
+    /** Sons de respiration (pour repérer les pauses respiratoires). */
+    const val BREATHING = 36
+    const val GASP = 39
+    const val SNORT = 41
+
+    /**
+     * Bruits perturbants retenus : uniquement des sons précis et nets.
+     * Les catégories vagues (« Animal », moteur, grondement…) sont ignorées car le
+     * modèle y range souvent des respirations ou des bruits du lit.
+     */
+    private val VAGUE = setOf(67, 68, 103, 117, 118, 121, 125, 282, 283, 288, 294, 300, 337, 338, 342, 343, 346, 442, 487)
+    val DISTURBING: Set<Int> = Labels.known().filter { it !in VAGUE && it !in SNORE && it !in SPEECH && it !in COUGH }.toSet() +
+        (132..140) // musique
 
     data class Detection(val category: SoundCategory, val index: Int, val confidence: Float)
 
     fun decide(scores: FloatArray, levelAboveFloor: Float, sensitivity: Int): Detection? {
         val f = when (sensitivity) { 0 -> 1.3f; 2 -> 0.75f; else -> 1f }
-        val noiseGate = when (sensitivity) { 0 -> 15f; 2 -> 9f; else -> 12f }
+        val noiseGate = when (sensitivity) { 0 -> 18f; 2 -> 12f; else -> 15f }
         fun best(ids: IntArray): Pair<Int, Float> {
             var bi = ids[0]; var bv = 0f
             for (i in ids) if (scores[i] > bv) { bv = scores[i]; bi = i }
@@ -85,15 +91,14 @@ object SoundRules {
         val (si, sv) = best(SNORE)
         if (sv >= 0.25f * f) return Detection(SoundCategory.SNORING, si, sv)
         val (pi, pv) = best(SPEECH)
-        if (pv >= 0.35f * f) return Detection(SoundCategory.SPEECH, pi, pv)
+        if (pv >= 0.4f * f) return Detection(SoundCategory.SPEECH, pi, pv)
         val (ci, cv) = best(COUGH)
-        if (cv >= 0.3f * f) return Detection(SoundCategory.COUGH, ci, cv)
+        if (cv >= 0.35f * f) return Detection(SoundCategory.COUGH, ci, cv)
         if (levelAboveFloor >= noiseGate) {
+            // Le son le plus probable doit être un bruit perturbant précis et assez sûr
             var bi = -1; var bv = 0f
-            for (i in scores.indices) if (i !in IGNORED && scores[i] > bv) { bv = scores[i]; bi = i }
-            if (bi >= 0 && bv >= 0.25f * f && bi !in SNORE && bi !in SPEECH && bi !in COUGH) {
-                return Detection(SoundCategory.NOISE, bi, bv)
-            }
+            for (i in scores.indices) if (scores[i] > bv) { bv = scores[i]; bi = i }
+            if (bi in DISTURBING && bv >= 0.45f * f) return Detection(SoundCategory.NOISE, bi, bv)
         }
         return null
     }

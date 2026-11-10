@@ -61,7 +61,7 @@ fun NightDetailScreen(vm: MainViewModel, id: Long, onBack: () -> Unit) {
     val epochs by remember(id) { vm.repo.dao.epochsFlow(id) }.collectAsState(emptyList())
     val events by remember(id) { vm.repo.dao.eventsFlow(id) }.collectAsState(emptyList())
     var confirmDelete by remember { mutableStateOf(false) }
-    var filter by remember { mutableStateOf<SoundCategory?>(null) }
+    var showAll by remember { mutableStateOf(false) }
 
     DisposableEffect(id) { onDispose { ClipPlayer.stop() } }
     // Va chercher les données Mi Fitness (elles arrivent parfois après le réveil)
@@ -130,7 +130,7 @@ fun NightDetailScreen(vm: MainViewModel, id: Long, onBack: () -> Unit) {
 
         ExternalCard(n)
 
-        if (n.audioEnabled) SoundsCard(n, events, filter) { filter = it }
+        if (n.audioEnabled) SoundsCard(n, events, showAll) { showAll = !showAll }
 
         GlassButton("Supprimer cette nuit", { confirmDelete = true }, Modifier.fillMaxWidth())
     }
@@ -181,35 +181,43 @@ private fun ExternalCard(n: Night) {
 }
 
 @Composable
-private fun SoundsCard(n: Night, events: List<SoundEvent>, filter: SoundCategory?, onFilter: (SoundCategory?) -> Unit) {
+private fun SoundsCard(n: Night, events: List<SoundEvent>, showAll: Boolean, onToggle: () -> Unit) {
     Card(title = "Bruits de la nuit") {
         Row(Modifier.fillMaxWidth()) {
-            Stat("Ronflements", Fmt.hm(n.snoreMin), Modifier.weight(1f))
-            Stat("Paroles", "${n.talkCount}", Modifier.weight(0.8f))
-            Stat("Toux", "${n.coughCount}", Modifier.weight(0.7f))
-            Stat("Bruits", "${n.noiseCount}", Modifier.weight(0.7f))
+            Stat("Ronflements", Fmt.hm(n.snoreMin), Modifier.weight(1.1f))
+            Stat("Pauses resp.", "${n.apneaCount}", Modifier.weight(1f))
+            Stat("Somniloquie", "${n.talkCount}", Modifier.weight(1f))
         }
-        if (events.isEmpty()) {
-            Hint("Aucun bruit notable détecté. Nuit calme !")
-            return@Card
+        Row(Modifier.fillMaxWidth()) {
+            Stat("Toux", "${n.coughCount}", Modifier.weight(1.1f))
+            Stat("Bruits", "${n.noiseCount}", Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            GlassChip("Tous", filter == null, { onFilter(null) })
-            for (c in SoundCategory.entries) {
-                if (events.any { it.category == c.id }) {
-                    val short = when (c) {
-                        SoundCategory.SNORING -> "Ronflements"
-                        SoundCategory.SPEECH -> "Paroles"
-                        SoundCategory.COUGH -> "Toux"
-                        SoundCategory.NOISE -> "Bruits"
-                    }
-                    GlassChip(short, filter == c, { onFilter(c) })
-                }
+        if (n.apneaCount > 0) {
+            Hint(
+                "Pause respiratoire possible = ronflement, silence d'au moins 10 s puis reprise brusque du souffle. " +
+                    "Ce n'est pas un diagnostic ; si cela revient souvent, parlez-en à un médecin.",
+            )
+        }
+    }
+    val highlights = events.filter { it.highlight }
+    Card(title = "Moments de la nuit") {
+        if (highlights.isEmpty()) Hint("Aucun moment marquant pendant le sommeil. Nuit calme !")
+        for (e in highlights) EventRow(e)
+    }
+    val others = events.filter { !it.highlight }
+    if (others.isNotEmpty()) {
+        GlassButton(
+            if (showAll) "Masquer les autres sons" else "Voir tous les sons détectés (${others.size})",
+            onToggle, Modifier.fillMaxWidth(),
+        )
+        if (showAll) {
+            Card {
+                Hint("Sons sans extrait conservé (heure, type, durée).")
+                for (e in others.take(300)) EventRow(e)
+                if (others.size > 300) Hint("… et ${others.size - 300} autres")
             }
         }
-        val list = events.filter { filter == null || it.category == filter.id }
-        for (e in list.take(150)) EventRow(e)
-        if (list.size > 150) Hint("… et ${list.size - 150} autres")
     }
 }
 
@@ -223,7 +231,7 @@ private fun EventRow(e: SoundEvent) {
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text("${Fmt.clock(e.start)}  ${e.label}", color = Palette.text, fontSize = 15.sp)
             Text(
-                "${cat.label} · ${Fmt.duration(e.end - e.start)}" + if (path == null) " · extrait non conservé" else "",
+                if (cat == SoundCategory.APNEA) cat.label else "${cat.label} · ${Fmt.duration(e.end - e.start)}",
                 color = Palette.textFaint, fontSize = 12.sp,
             )
         }

@@ -15,6 +15,7 @@ interface SleepDao {
     @Query("SELECT * FROM nights WHERE id = :id") fun nightFlow(id: Long): Flow<Night?>
     @Query("SELECT * FROM nights WHERE finished = 1 ORDER BY startTime DESC") fun nightsFlow(): Flow<List<Night>>
     @Query("SELECT * FROM nights WHERE finished = 0") suspend fun unfinished(): List<Night>
+    @Query("SELECT * FROM nights WHERE finished = 1 AND analysisVersion < :v") suspend fun outdated(v: Int): List<Night>
     @Query("DELETE FROM nights WHERE id = :id") suspend fun deleteNight(id: Long)
     @Query("DELETE FROM nights") suspend fun deleteAll()
 
@@ -29,4 +30,5 @@ interface SleepDao {
     @Query("SELECT * FROM sound_events WHERE clipPath IS NOT NULL AND start < :before") suspend fun clipsBefore(before: Long): List<SoundEvent>
     @Query("SELECT * FROM sound_events WHERE clipPath IS NOT NULL") suspend fun allClips(): List<SoundEvent>
     @Query("UPDATE sound_events SET clipPath = NULL WHERE id = :id") suspend fun clearClip(id: Long)
+    @Query("UPDATE sound_events SET highlight = :h WHERE id = :id") suspend fun setHighlight(id: Long, h: Boolean)
 }

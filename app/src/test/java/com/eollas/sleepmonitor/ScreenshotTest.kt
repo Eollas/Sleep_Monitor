@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.rule.GrantPermissionRule
 import com.eollas.sleepmonitor.analysis.SleepAnalyzer
@@ -67,14 +68,20 @@ class ScreenshotTest {
                 Epoch(id, start + i * SleepAnalyzer.EPOCH_MS, a, db, db + 6f)
             }
             dao.insertEpochs(epochs)
-            val clip = File(ctx.filesDir, "clips/$id/demo.m4a").apply { parentFile?.mkdirs(); writeBytes(ByteArray(10)) }
-            suspend fun ev(min: Int, cat: SoundCategory, label: String, sec: Int) = dao.insertEvent(
-                SoundEvent(
-                    nightId = id, start = start + min * 60_000L, end = start + min * 60_000L + sec * 1000L,
-                    category = cat.id, label = label, confidence = 0.6f, peakDb = 60f, clipPath = clip.path,
-                ),
-            )
-            for (k in 0 until 6) ev(100 + k * 9, SoundCategory.SNORING, "Ronflement", 60 + rnd.nextInt(0, 200))
+            var k = 0
+            suspend fun ev(min: Int, cat: SoundCategory, label: String, sec: Int) {
+                val clip = File(ctx.filesDir, "clips/$id/${k++}.m4a").apply { parentFile?.mkdirs(); writeBytes(ByteArray(10)) }
+                dao.insertEvent(
+                    SoundEvent(
+                        nightId = id, start = start + min * 60_000L, end = start + min * 60_000L + sec * 1000L,
+                        category = cat.id, label = label, confidence = 0.6f, peakDb = 55f + rnd.nextInt(0, 15), clipPath = clip.path,
+                    ),
+                )
+            }
+            ev(2, SoundCategory.SPEECH, "Paroles", 4)
+            for (j in 0 until 40) ev(90 + j * 3, SoundCategory.SNORING, "Ronflement", 5 + rnd.nextInt(0, 200))
+            ev(140, SoundCategory.APNEA, "Pause respiratoire (14 s)", 14)
+            ev(171, SoundCategory.APNEA, "Pause respiratoire (21 s)", 21)
             ev(185, SoundCategory.SPEECH, "Paroles", 7)
             ev(240, SoundCategory.COUGH, "Toux", 3)
             ev(300, SoundCategory.NOISE, "Moto", 12)
@@ -88,16 +95,21 @@ class ScreenshotTest {
     private fun settle() {
         compose.mainClock.advanceTimeBy(1500)
         compose.waitForIdle()
+        Thread.sleep(300)
+        compose.waitForIdle()
     }
 
     @Test
     fun captures() {
         seed()
+        Thread.sleep(3000) // laisse le temps à la vérification de mise à jour
         settle()
         compose.onRoot().captureRoboImage("$out/1_accueil.png")
 
         compose.onNodeWithText("Voir").performClick(); settle()
         compose.onRoot().captureRoboImage("$out/3_recap.png")
+        compose.onNode(androidx.compose.ui.test.hasText("Voir tous les sons", substring = true)).performScrollTo(); settle()
+        compose.onRoot().captureRoboImage("$out/3b_moments.png")
         compose.activity.onBackPressedDispatcher.onBackPressed(); settle()
 
         compose.onNodeWithText("Mes nuits").performClick(); settle()
@@ -105,6 +117,8 @@ class ScreenshotTest {
 
         compose.onNodeWithText("Réglages").performClick(); settle()
         compose.onRoot().captureRoboImage("$out/5_reglages.png")
+        compose.onNodeWithText("Mise à jour").performScrollTo(); settle()
+        compose.onRoot().captureRoboImage("$out/6_mise_a_jour.png")
 
         compose.onNodeWithText("Sommeil").performClick(); settle()
         val now = System.currentTimeMillis()

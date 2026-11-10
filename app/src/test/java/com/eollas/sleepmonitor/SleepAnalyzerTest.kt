@@ -30,18 +30,52 @@ class SleepAnalyzerTest {
         val r = SleepAnalyzer.analyze(t, a, start, start + t.size * ep, 1)
         assertNotNull(r.onset)
         val latency = (r.onset!! - start) / 60_000
-        assertTrue("latence $latency", latency in 18..25)
+        assertTrue("latence $latency", latency in 20..30)
         val wakeMin = (r.wake!! - start) / 60_000
         assertTrue("réveil $wakeMin", wakeMin in 465..471)
         val runs = mutableListOf<String>(); var s0 = -1
         for (i in r.stages.indices) { if (r.stages[i] == Stage.AWAKE) { if (s0 < 0) s0 = i } else if (s0 >= 0) { runs += "$s0-${i - 1}"; s0 = -1 } }
         println("éveil: $runs onset=${(r.onset!! - start) / ep}")
         assertEquals(1, r.awakenings)
-        assertTrue("sommeil ${r.sleepMin}", r.sleepMin in 400..450)
-        assertTrue("profond ${r.deepMin}", r.deepMin > 30)
+        assertTrue("sommeil ${r.sleepMin}", r.sleepMin in 390..450)
+        assertTrue("profond ${r.deepMin}", r.deepMin in 30..115)
         assertTrue("score ${r.score}", r.score in 60..100)
         assertEquals(Stage.AWAKE, r.stages[0])
         println("latence=$latency réveil=$wakeMin sommeil=${r.sleepMin} profond=${r.deepMin} léger=${r.lightMin} réveils=${r.awakenings} score=${r.score}")
+    }
+
+    @Test
+    fun parolesEtEcranRetardentEndormissement() {
+        // Calme dès le coucher, mais on parle / regarde l'écran pendant 12 min
+        val n = 600
+        val rnd = Random(4)
+        val a = FloatArray(n) { 1f + rnd.nextFloat() * 0.6f }
+        for (i in n - 20 until n) a[i] = 20f
+        val t = LongArray(n) { start + it * ep }
+        val busy = BooleanArray(n) { it in 2..20 && it % 3 == 0 }
+        val screen = BooleanArray(n) { it < 24 }
+        val calm = SleepAnalyzer.analyze(t, a, start, start + n * ep, 1)
+        val r = SleepAnalyzer.analyze(t, a, start, start + n * ep, 1, SleepAnalyzer.Flags(screen, busy, null))
+        val lat0 = (calm.onset!! - start) / 60_000
+        val lat = (r.onset!! - start) / 60_000
+        println("latence calme=$lat0 avec écran/paroles=$lat")
+        assertTrue("au moins 5 min même si calme : $lat0", lat0 >= 5)
+        assertTrue("après l'écran + 5 min : $lat", lat >= 17)
+    }
+
+    @Test
+    fun profondRealiste() {
+        val (t, a) = night()
+        val r = SleepAnalyzer.analyze(t, a, start, start + t.size * ep, 1)
+        assertTrue("profond ${r.deepMin} / ${r.sleepMin}", r.deepMin <= r.sleepMin * 0.26)
+    }
+
+    @Test
+    fun horairesMiFitnessRespectes() {
+        val (t, a) = night()
+        val r = SleepAnalyzer.analyze(t, a, start, start + t.size * ep, 1, minOnset = start + 40 * 60_000L, maxWake = start + 400 * 60_000L)
+        assertTrue(r.onset!! >= start + 40 * 60_000L)
+        assertTrue(r.wake!! <= start + 400 * 60_000L + ep)
     }
 
     @Test

@@ -1,0 +1,383 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "67ca1352bc596ea71555e07c2fc9a60f",
+    "entities": [
+      {
+        "tableName": "nights",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER, `sleepOnset` INTEGER, `wakeTime` INTEGER, `totalSleepMin` INTEGER NOT NULL, `deepMin` INTEGER NOT NULL, `lightMin` INTEGER NOT NULL, `awakeMin` INTEGER NOT NULL, `latencyMin` INTEGER NOT NULL, `awakenings` INTEGER NOT NULL, `efficiency` INTEGER NOT NULL, `score` INTEGER NOT NULL, `snoreMin` INTEGER NOT NULL, `talkCount` INTEGER NOT NULL, `coughCount` INTEGER NOT NULL, `noiseCount` INTEGER NOT NULL, `avgDb` REAL NOT NULL, `audioEnabled` INTEGER NOT NULL, `finished` INTEGER NOT NULL, `interrupted` INTEGER NOT NULL, `hcExported` INTEGER NOT NULL, `extSource` TEXT, `extSleepMin` INTEGER, `extDeepMin` INTEGER, `extLightMin` INTEGER, `extRemMin` INTEGER, `extAwakeMin` INTEGER, `extStart` INTEGER, `extEnd` INTEGER, `hrAvg` INTEGER, `hrMin` INTEGER, `apneaCount` INTEGER NOT NULL DEFAULT 0, `analysisVersion` INTEGER NOT NULL DEFAULT 1)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTime",
+            "columnName": "startTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTime",
+            "columnName": "endTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sleepOnset",
+            "columnName": "sleepOnset",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "wakeTime",
+            "columnName": "wakeTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "totalSleepMin",
+            "columnName": "totalSleepMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deepMin",
+            "columnName": "deepMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightMin",
+            "columnName": "lightMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awakeMin",
+            "columnName": "awakeMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latencyMin",
+            "columnName": "latencyMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awakenings",
+            "columnName": "awakenings",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "efficiency",
+            "columnName": "efficiency",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "score",
+            "columnName": "score",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snoreMin",
+            "columnName": "snoreMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "talkCount",
+            "columnName": "talkCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coughCount",
+            "columnName": "coughCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "noiseCount",
+            "columnName": "noiseCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avgDb",
+            "columnName": "avgDb",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "audioEnabled",
+            "columnName": "audioEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finished",
+            "columnName": "finished",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interrupted",
+            "columnName": "interrupted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hcExported",
+            "columnName": "hcExported",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "extSource",
+            "columnName": "extSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "extSleepMin",
+            "columnName": "extSleepMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extDeepMin",
+            "columnName": "extDeepMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extLightMin",
+            "columnName": "extLightMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extRemMin",
+            "columnName": "extRemMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extAwakeMin",
+            "columnName": "extAwakeMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extStart",
+            "columnName": "extStart",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extEnd",
+            "columnName": "extEnd",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hrAvg",
+            "columnName": "hrAvg",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hrMin",
+            "columnName": "hrMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "apneaCount",
+            "columnName": "apneaCount",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "analysisVersion",
+            "columnName": "analysisVersion",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "epochs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`nightId` INTEGER NOT NULL, `t` INTEGER NOT NULL, `activity` REAL NOT NULL, `db` REAL NOT NULL, `maxDb` REAL NOT NULL, `stage` INTEGER NOT NULL, `screenOn` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`nightId`, `t`), FOREIGN KEY(`nightId`) REFERENCES `nights`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "nightId",
+            "columnName": "nightId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "t",
+            "columnName": "t",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activity",
+            "columnName": "activity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "db",
+            "columnName": "db",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxDb",
+            "columnName": "maxDb",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stage",
+            "columnName": "stage",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "screenOn",
+            "columnName": "screenOn",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "nightId",
+            "t"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "nights",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "nightId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "sound_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nightId` INTEGER NOT NULL, `start` INTEGER NOT NULL, `end` INTEGER NOT NULL, `category` INTEGER NOT NULL, `label` TEXT NOT NULL, `confidence` REAL NOT NULL, `peakDb` REAL NOT NULL, `clipPath` TEXT, `highlight` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`nightId`) REFERENCES `nights`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nightId",
+            "columnName": "nightId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "start",
+            "columnName": "start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "end",
+            "columnName": "end",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peakDb",
+            "columnName": "peakDb",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clipPath",
+            "columnName": "clipPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "highlight",
+            "columnName": "highlight",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sound_events_nightId",
+            "unique": false,
+            "columnNames": [
+              "nightId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sound_events_nightId` ON `${TABLE_NAME}` (`nightId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "nights",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "nightId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '67ca1352bc596ea71555e07c2fc9a60f')"
+    ]
+  }
+}

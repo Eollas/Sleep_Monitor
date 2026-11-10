@@ -1,5 +1,6 @@
 package com.eollas.sleepmonitor.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -40,6 +41,9 @@ data class Night(
     val extEnd: Long? = null,
     val hrAvg: Int? = null,
     val hrMin: Int? = null,
+    @ColumnInfo(defaultValue = "0") val apneaCount: Int = 0,
+    // Version de l'analyse : les vieilles nuits sont recalculées après une mise à jour
+    @ColumnInfo(defaultValue = "1") val analysisVersion: Int = 0,
 )
 
 /** Tranche de 30 secondes : mouvement (milli-g) et niveau sonore (dB approx.). */
@@ -55,6 +59,7 @@ data class Epoch(
     val db: Float,
     val maxDb: Float,
     val stage: Int = Stage.UNKNOWN,
+    @ColumnInfo(defaultValue = "0") val screenOn: Boolean = false,
 )
 
 object Stage {
@@ -80,13 +85,16 @@ data class SoundEvent(
     val confidence: Float,
     val peakDb: Float,
     val clipPath: String? = null,
+    // Fait partie des « moments de la nuit » gardés le matin
+    @ColumnInfo(defaultValue = "0") val highlight: Boolean = false,
 )
 
 enum class SoundCategory(val id: Int, val label: String, val color: Long) {
     SNORING(1, "Ronflement", 0xFF9D8CF2),
     SPEECH(2, "Paroles", 0xFF6FC3DF),
     COUGH(3, "Toux", 0xFFE9B872),
-    NOISE(4, "Bruit perturbant", 0xFFE57B7B);
+    NOISE(4, "Bruit perturbant", 0xFFE57B7B),
+    APNEA(5, "Pause respiratoire", 0xFFFF8A65);
 
     companion object {
         fun of(id: Int) = entries.firstOrNull { it.id == id } ?: NOISE

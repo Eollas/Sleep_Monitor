@@ -9,18 +9,30 @@ Le propriétaire communique en **français** : répondre en français, simplemen
 App Android (Kotlin, Jetpack Compose, Room, DataStore) pour Redmagic 11 Pro,
 Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 
-- **100 % local** : permission INTERNET retirée (`tools:node="remove"`),
-  sauvegarde cloud désactivée. Ne jamais ajouter de réseau sans son accord.
+- **Aucune donnée ne quitte le téléphone** : la permission INTERNET sert
+  uniquement à la mise à jour (`update/Updater` : lecture de l'API GitHub
+  releases + téléchargement de l'APK, installation via PackageInstaller).
+  Accord du propriétaire le 10 nov. 2026 (« tant que ça ne diffuse pas de
+  données »). Sauvegarde cloud désactivée. Aucun autre usage réseau sans son accord.
 - Service de premier plan `tracking/SleepTrackingService` (types micro + santé),
   tranches de 30 s : mouvement (accéléromètre, milli-g) + niveau sonore.
-- `analysis/SleepAnalyzer` : actigraphie (seuil adapté au bruit du capteur,
-  endormissement = 15 min calmes, réveil = fin des 10 dernières min calmes,
-  phases éveil / léger / profond estimées, score sur 100). Tests :
-  `SleepAnalyzerTest`.
+- `analysis/SleepAnalyzer` : actigraphie (seuil adapté au bruit du capteur).
+  Endormissement = 15 min sans mouvement, écran éteint, sans paroles/bruits,
+  compté après 5 min de calme et ≥ 5 min après le coucher (ronflement régulier
+  = sommeil). Réveil = fin des 10 dernières min calmes. Profond ≤ 25 %.
+  Heures Mi Fitness (si dispo) encadrent l'estimation. `VERSION` : à augmenter
+  quand l'analyse change → les anciennes nuits sont recalculées au démarrage.
+  Tests : `SleepAnalyzerTest`.
 - Sons : `AudioMonitor` (16 kHz) + `SoundClassifier` (YAMNet, `assets/yamnet.tflite`,
-  LiteRT) → ronflement / paroles / toux / bruit perturbant (`SoundRules`, noms
-  français dans `Labels`). Extraits AAC `.m4a` dans `files/clips/{nuit}/`,
-  conservation réglable (3 j → toujours).
+  LiteRT) → ronflement / paroles / toux / bruit perturbant / pause respiratoire
+  (`SoundRules` ; bruits = liste blanche de sons précis, catégories vagues
+  « Animal », moteur… ignorées ; noms français dans `Labels`).
+  Pause respiratoire possible = ≥ 3 ronflements dans la minute, puis 10-60 s
+  sans souffle, puis reprise brusque (halètement / reniflement / ronflement fort).
+  Extraits AAC `.m4a` provisoires dans `files/clips/{nuit}/` ; le matin
+  `analysis/Highlights` garde 10-20 « moments de la nuit » (pauses, somniloquie
+  pendant le sommeil, ronflements longs, bruits forts), le reste est effacé.
+  Conservation réglable (3 j → toujours).
 - Arrêt automatique : téléphone pris en main 3 min après ≥ 3 h de sommeil.
 - Mi Fitness : via **Health Connect** (`health/HealthConnectManager`) : lecture
   sommeil + rythme cardiaque, écriture de nos nuits (option).
@@ -38,6 +50,8 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 - Versions : AGP 8.13, Kotlin 2.4, Compose BOM 2026.06.01 (les BOM plus récents
   exigent AGP 9 / SDK 37).
 - GitHub Actions compile l'APK à chaque push ; sur `main`, publié en Release « latest ».
+- Base Room v2 (migration 1→2 testée par `MigrationTest`) : ne jamais casser
+  les données existantes, toujours écrire une migration.
 - Clé de signature fixe `keystore/sleepmonitor.jks` : ne pas la changer, sinon
   les mises à jour ne s'installent plus par-dessus.
 
@@ -59,6 +73,11 @@ https://github.com/Eollas/Sleep_Monitor/releases/download/latest/SleepMonitor.ap
   avec YAMNet, récapitulatif, Health Connect / Mi Fitness, interface vitre
   inspirée d'une capture de « Sleep Island » envoyée par le propriétaire).
   Pas encore testée sur le vrai téléphone au moment de la première version.
+- 10 nov. 2026 (après la 1re nuit réelle) : endormissement trop tôt → règles
+  sons + écran ; trop de faux « Animal » → liste blanche ; 350 extraits → 10-20
+  moments forts ; détection des pauses respiratoires ; profond plafonné ;
+  bouton « Mettre à jour » intégré (Internet autorisé pour ça seulement) ;
+  voile sous la barre d'état.
 
 ## Reste à faire / pistes
 

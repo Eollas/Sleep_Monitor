@@ -28,6 +28,9 @@ object Labels {
         483 to "Fracas", 487 to "Grondement", 518 to "Télévision", 519 to "Radio",
     )
 
+    /** Index des sons qui ont un nom français précis. */
+    fun known(): Set<Int> = fr.keys
+
     fun of(index: Int): String = fr[index] ?: when (index) {
         in 132..276 -> "Musique"
         in 294..339 -> "Circulation"

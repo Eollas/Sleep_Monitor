@@ -102,6 +102,7 @@ private fun NightRow(n: Night, onClick: () -> Unit) {
                 )
                 val sounds = buildList {
                     if (n.snoreMin > 0) add("ronflements ${n.snoreMin} min")
+                    if (n.apneaCount > 0) add("pauses ${n.apneaCount}")
                     if (n.talkCount > 0) add("paroles ${n.talkCount}")
                     if (n.noiseCount > 0) add("bruits ${n.noiseCount}")
                 }
