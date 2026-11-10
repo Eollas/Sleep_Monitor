@@ -63,9 +63,12 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 - Pas de PR obligatoire ici : il peut demander de pousser directement sur `main`.
   Le travail se fait directement sur `main` (une PR n'a de sens que pour une
   branche qui contient des commits absents de `main`).
-- Branche par défaut du dépôt : doit être `main` (Settings → General). Tant que
-  c'est `claude/nifty-curie-tk9hmj`, GitHub refuse de supprimer cette branche
-  (erreur 403), qui est vide et en retard sur `main`.
+- Ancienne branche `claude/nifty-curie-tk9hmj` : entièrement contenue dans
+  `main` (vérifié le 10 nov. 2026). Sa suppression depuis la session (`git push
+  --delete`) a été refusée (erreur 403, cause non confirmée) : le propriétaire
+  la supprime lui-même sur GitHub.
+- **Ne jamais inventer** (menus, réglages, causes d'erreur) : si on ne sait pas,
+  le dire et vérifier avant d'affirmer.
 - Rien ne doit quitter le téléphone sans son accord (pas de réseau, pas de cloud).
 
 ## Installer / mettre à jour
@@ -84,7 +87,8 @@ https://github.com/Eollas/Sleep_Monitor/releases/download/latest/SleepMonitor.ap
   sons + écran ; trop de faux « Animal » → liste blanche ; 350 extraits → 10-20
   moments forts ; détection des pauses respiratoires ; profond plafonné ;
   bouton « Mettre à jour » intégré (Internet autorisé pour ça seulement) ;
-  voile sous la barre d'état.
+  voile sous la barre d'état. Mise à jour 1.0.4 → 1.0.5 depuis l'app : validée
+  sur le téléphone par le propriétaire.
 
 ## Reste à faire / pistes
 
