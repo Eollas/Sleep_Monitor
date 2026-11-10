@@ -40,3 +40,34 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 - GitHub Actions compile l'APK à chaque push ; sur `main`, publié en Release « latest ».
 - Clé de signature fixe `keystore/sleepmonitor.jks` : ne pas la changer, sinon
   les mises à jour ne s'installent plus par-dessus.
+
+## Préférences du propriétaire
+
+- Réponses courtes, aperçus (captures) appréciés.
+- Pas de PR obligatoire ici : il peut demander de pousser directement sur `main`.
+- Rien ne doit quitter le téléphone sans son accord (pas de réseau, pas de cloud).
+
+## Installer / mettre à jour
+
+APK publié à chaque push sur `main` :
+https://github.com/Eollas/Sleep_Monitor/releases/download/latest/SleepMonitor.apk
+(même lien à chaque version, installation par-dessus, données conservées).
+
+## Historique
+
+- 9-10 nov. 2026 : création de l'app de zéro (suivi par mouvements, sons classés
+  avec YAMNet, récapitulatif, Health Connect / Mi Fitness, interface vitre
+  inspirée d'une capture de « Sleep Island » envoyée par le propriétaire).
+  Pas encore testée sur le vrai téléphone au moment de la première version.
+
+## Reste à faire / pistes
+
+- Retours après les premières nuits réelles : ajuster seuils de mouvement
+  (`SleepAnalyzer`) et de sons (`SoundRules`, sensibilité).
+- **Play Store (reporté, « on verra plus tard »)** : compte développeur (~25 $),
+  test fermé 12 testeurs × 14 jours, déclarations micro / service de premier
+  plan / Health Connect, politique de confidentialité publique (idée :
+  photo.eollas.com), format `.aab`, **nouvelle clé d'envoi secrète** (l'actuelle
+  est publique dans le dépôt → la version Play ne s'installera pas par-dessus,
+  données perdues), nom plus distinctif (ex. « Eollas Sleep »), fiche Play
+  (textes, icône 512 px, bannière, captures).
