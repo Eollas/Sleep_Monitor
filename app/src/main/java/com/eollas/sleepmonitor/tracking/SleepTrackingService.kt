@@ -104,7 +104,7 @@ class SleepTrackingService : LifecycleService() {
             motion = MotionMonitor(this@SleepTrackingService).also { it.start() }
             if (withAudio) {
                 audio = AudioMonitor(
-                    this@SleepTrackingService, nightId, sensitivity,
+                    this@SleepTrackingService, nightId, s.soundSensitivity,
                     onEvent = ::saveEvent,
                     onLevel = { db -> Live.state.update { it.copy(db = db) } },
                 ).also { it.start() }

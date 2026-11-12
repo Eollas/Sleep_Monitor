@@ -15,6 +15,7 @@ interface SleepDao {
     @Query("SELECT * FROM nights WHERE id = :id") fun nightFlow(id: Long): Flow<Night?>
     @Query("SELECT * FROM nights WHERE finished = 1 ORDER BY startTime DESC") fun nightsFlow(): Flow<List<Night>>
     @Query("SELECT * FROM nights WHERE finished = 0") suspend fun unfinished(): List<Night>
+    @Query("SELECT * FROM nights ORDER BY startTime") suspend fun allNights(): List<Night>
     @Query("SELECT * FROM nights WHERE finished = 1 AND analysisVersion < :v") suspend fun outdated(v: Int): List<Night>
     @Query("DELETE FROM nights WHERE id = :id") suspend fun deleteNight(id: Long)
     @Query("DELETE FROM nights") suspend fun deleteAll()

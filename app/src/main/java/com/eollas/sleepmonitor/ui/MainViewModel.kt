@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eollas.sleepmonitor.data.AppSettings
+import com.eollas.sleepmonitor.data.Exporter
 import com.eollas.sleepmonitor.data.Night
 import com.eollas.sleepmonitor.data.Repository
 import com.eollas.sleepmonitor.tracking.Live
@@ -42,6 +43,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var resumeTick by mutableIntStateOf(0); private set
     var openNight by mutableStateOf<Long?>(null)
     var update by mutableStateOf(UpdateUi()); private set
+    var exporting by mutableStateOf(false); private set
+    var exportError by mutableStateOf<String?>(null); private set
 
     private val wallpaperFile get() = File(getApplication<Application>().filesDir, "wallpaper.jpg")
 
@@ -107,6 +110,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setAudio(on: Boolean) = viewModelScope.launch { repo.settings.setAudio(on) }
     fun setAutoStop(on: Boolean) = viewModelScope.launch { repo.settings.setAutoStop(on) }
     fun setSensitivity(v: Int) = viewModelScope.launch { repo.settings.setSensitivity(v) }
+    fun setSoundSensitivity(v: Float) = viewModelScope.launch { repo.settings.setSoundSensitivity(v) }
     fun setWallpaper(id: String) = viewModelScope.launch { repo.settings.setWallpaper(id) }
     fun setDim(v: Float) = viewModelScope.launch { repo.settings.setDim(v) }
     fun setHcWrite(on: Boolean) = viewModelScope.launch { repo.settings.setHcWrite(on) }
@@ -142,6 +146,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteNight(id: Long) = viewModelScope.launch(Dispatchers.IO) {
         repo.deleteNight(id)
         clipsSize = repo.clipsSize()
+    }
+
+    /** Prépare le ZIP de toutes les nuits, puis [onReady] ouvre le menu Partager. */
+    fun exportData(onReady: (File) -> Unit) {
+        if (exporting) return
+        viewModelScope.launch {
+            exporting = true; exportError = null
+            runCatching { withContext(Dispatchers.IO) { Exporter(getApplication(), repo).export() } }
+                .onSuccess(onReady)
+                .onFailure { exportError = "Export impossible : ${it.message ?: "erreur inconnue"}" }
+            exporting = false
+        }
     }
 
     fun deleteAllClips() = viewModelScope.launch(Dispatchers.IO) {

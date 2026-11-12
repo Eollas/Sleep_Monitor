@@ -28,13 +28,41 @@ object Labels {
         483 to "Fracas", 487 to "Grondement", 518 to "Télévision", 519 to "Radio",
     )
 
+    /**
+     * Noms des sons de fond et de respiration : servent seulement à afficher les
+     * 3 catégories les plus probables (jamais comptés comme bruits perturbants).
+     */
+    private val context = mapOf(
+        24 to "Chant", 35 to "Sifflement", 36 to "Respiration", 37 to "Respiration sifflante",
+        39 to "Halètement", 40 to "Essoufflement", 45 to "Reniflement", 406 to "Ventilateur",
+        407 to "Climatisation", 481 to "Froissement", 494 to "Silence", 500 to "Pièce fermée",
+        501 to "Grande pièce", 505 to "Réverbération", 506 to "Écho", 507 to "Bruit",
+        508 to "Bruit ambiant", 509 to "Grésillement", 510 to "Bourdonnement électrique",
+        514 to "Bruit blanc", 515 to "Bruit rose", 516 to "Pulsation", 517 to "Vibration",
+    )
+
     /** Index des sons qui ont un nom français précis. */
     fun known(): Set<Int> = fr.keys
+
+    /** Nom le plus précis possible : français, sinon nom anglais du modèle YAMNet. */
+    fun name(index: Int, english: List<String> = emptyList()): String =
+        fr[index] ?: context[index] ?: english.getOrNull(index) ?: of(index)
 
     fun of(index: Int): String = fr[index] ?: when (index) {
         in 132..276 -> "Musique"
         in 294..339 -> "Circulation"
         in 67..131 -> "Animal"
         else -> "Bruit"
+    }
+}
+
+/** Noms anglais des 521 catégories YAMNet (fichier `assets/yamnet_labels.txt`, extrait du modèle). */
+object YamnetNames {
+    @Volatile private var names: List<String>? = null
+
+    fun get(ctx: android.content.Context): List<String> = names ?: synchronized(this) {
+        names ?: runCatching {
+            ctx.assets.open("yamnet_labels.txt").bufferedReader().use { it.readLines() }
+        }.getOrDefault(emptyList()).also { names = it }
     }
 }

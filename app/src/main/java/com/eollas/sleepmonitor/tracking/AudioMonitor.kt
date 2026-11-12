@@ -20,10 +20,12 @@ import kotlin.math.sqrt
 class AudioMonitor(
     private val ctx: Context,
     private val nightId: Long,
-    private val sensitivity: Int,
+    /** Curseur de sensibilité : 0 = moins sensible, 1 = plus sensible. */
+    sensitivity: Float,
     private val onEvent: (SoundEvent, ShortArray?) -> Unit,
     private val onLevel: (Float) -> Unit,
 ) {
+    private val tuning = SoundRules.Tuning(sensitivity)
     @Volatile private var running = false
     private var thread: Thread? = null
     private var classifier: SoundClassifier? = null
@@ -34,9 +36,20 @@ class AudioMonitor(
     private var histFilled = 0
     private val window = FloatArray(SoundClassifier.WINDOW)
 
+    // Bruit de fond = niveau dépassé 85 % du temps sur la dernière minute (15e centile).
+    // Il suit le fond réel de la chambre au lieu de coller aux instants les plus silencieux.
+    private val floorHist = FloatArray(FLOOR_CHUNKS)
+    private var floorPos = 0
+    private var floorFilled = 0
+    private val floorSorted = FloatArray(FLOOR_CHUNKS)
     private var floor = 40f
     private val recentDb = ArrayDeque<Float>()
+    private val recentEnergy = ArrayDeque<Double>()
     private var sinceInfer = 0
+
+    /** Résultat de chaque analyse (toutes les 0,5 s) sur les 6 dernières secondes. */
+    private class Vote(val time: Long, val d: SoundRules.Detection?, val top: List<Pair<Int, Float>>, val above: Float)
+    private val votes = ArrayDeque<Vote>()
 
     private val lock = Any()
     private var energySum = 0.0
@@ -58,6 +71,8 @@ class AudioMonitor(
         var last: Long,
         var confidence: Float,
         var peakDb: Float,
+        var aboveDb: Float,
+        var top: List<Pair<Int, Float>>,
         val audio: ShortBuilder,
     )
     private var current: Current? = null
@@ -129,9 +144,11 @@ class AudioMonitor(
             if (db > epochMax) epochMax = db
         }
         onLevel(db)
-        // Bruit de fond : descend vite, remonte lentement
-        floor = if (db < floor) floor + (db - floor) * 0.1f else floor + 0.003f
+        floorHist[floorPos] = db
+        floorPos = (floorPos + 1) % FLOOR_CHUNKS
+        floorFilled = minOf(FLOOR_CHUNKS, floorFilled + 1)
         recentDb.addLast(db); if (recentDb.size > 10) recentDb.removeFirst()
+        recentEnergy.addLast(e / chunk.size); if (recentEnergy.size > 10) recentEnergy.removeFirst()
 
         for (s in chunk) {
             history[histPos] = s
@@ -149,23 +166,35 @@ class AudioMonitor(
         if (sinceInfer < HOP) return
         sinceInfer = 0
         if (histFilled < SoundClassifier.WINDOW) return
+        updateFloor()
 
+        // Niveau moyen de la dernière seconde (et non plus le pic d'un dixième de seconde)
+        val level = toDb(sqrt(recentEnergy.average()))
         val peak = recentDb.maxOrNull() ?: db
-        val above = peak - floor
+        val above = level - floor
         var detection: SoundRules.Detection? = null
         var scores: FloatArray? = null
         val cls = classifier
-        if (cls != null && above >= gate()) {
+        if (cls != null && above >= tuning.gateDb) {
             val start = (histPos - SoundClassifier.WINDOW + history.size) % history.size
             for (i in 0 until SoundClassifier.WINDOW) window[i] = history[(start + i) % history.size] / 32768f
             scores = runCatching { cls.classify(window) }.getOrNull()
-            detection = scores?.let { SoundRules.decide(it, above, sensitivity) }
+            detection = scores?.let { SoundRules.decide(it, above, tuning) }
         }
+        votes.addLast(Vote(now, detection, scores?.let { SoundRules.top(it) }.orEmpty(), above))
+        while (votes.size > VOTE_WINDOW) votes.removeFirst()
         checkBreathing(scores, detection, above, peak, now)
-        handle(detection, peak, now)
+        handle(detection, peak, above, now)
     }
 
-    private fun gate() = when (sensitivity) { 0 -> 7f; 2 -> 3f; else -> 5f }
+    /** Recalcule le bruit de fond (15e centile de la dernière minute). */
+    private fun updateFloor() {
+        val n = floorFilled
+        if (n == 0) return
+        floorHist.copyInto(floorSorted, 0, 0, n)
+        floorSorted.sort(0, n)
+        floor = floorSorted[(n * 15 / 100).coerceAtMost(n - 1)]
+    }
 
     /**
      * Pause respiratoire possible : on ronflait (au moins 3 ronflements dans la minute),
@@ -207,30 +236,61 @@ class AudioMonitor(
         onEvent(ev, a.audio.toArray())
     }
 
-    private fun handle(d: SoundRules.Detection?, peak: Float, now: Long) {
+    /**
+     * Un son n'est retenu que s'il est confirmé : la même famille doit gagner plusieurs
+     * analyses dans la fenêtre des 6 dernières secondes (voir [SoundRules.Tuning.votes]).
+     * Ensuite, chaque nouvelle analyse de la même famille prolonge l'événement.
+     */
+    private fun handle(d: SoundRules.Detection?, peak: Float, above: Float, now: Long) {
         val c = current
-        if (d != null) {
-            if (c != null && c.category == d.category && now - c.start < MAX_EVENT_MS) {
-                c.last = now
-                c.peakDb = max(c.peakDb, peak)
-                if (d.confidence > c.confidence) { c.confidence = d.confidence; c.index = d.index }
-            } else {
-                closeCurrent()
-                // On garde 2,5 s avant la détection pour entendre le début du bruit
-                val pre = minOf(histFilled, (SR * 2.5).toInt())
-                val b = ShortBuilder()
-                val from = (histPos - pre + history.size) % history.size
-                for (i in 0 until pre) b.add(history[(from + i) % history.size])
-                current = Current(d.category, d.index, now - 1000, now, d.confidence, peak, b)
+        if (c != null && d != null && d.category == c.category && now - c.start < MAX_EVENT_MS) {
+            c.last = now
+            c.peakDb = max(c.peakDb, peak)
+            c.aboveDb = max(c.aboveDb, above)
+            if (d.confidence > c.confidence) {
+                c.confidence = d.confidence; c.index = d.index
+                votes.lastOrNull()?.let { c.top = it.top }
             }
+            return
+        }
+        val confirmed = confirmedCategory()
+        if (confirmed != null && (c == null || confirmed != c.category || now - c.start >= MAX_EVENT_MS)) {
+            closeCurrent()
+            open(confirmed, peak, now)
         } else if (c != null && now - c.last > END_GAP_MS) {
             closeCurrent()
         }
     }
 
+    /** Famille confirmée dans la fenêtre de 6 s (la plus représentée si plusieurs). */
+    private fun confirmedCategory(): SoundCategory? {
+        val counts = votes.mapNotNull { it.d?.category }.groupingBy { it }.eachCount()
+        return counts.filter { (cat, n) -> n >= tuning.votes(cat) }.maxByOrNull { it.value }?.key
+    }
+
+    private fun open(cat: SoundCategory, peak: Float, now: Long) {
+        val mine = votes.filter { it.d?.category == cat }
+        if (mine.isEmpty()) return
+        val best = mine.maxBy { it.d!!.confidence }
+        // L'événement commence à la première analyse concordante (fenêtre d'≈ 1 s avant)
+        val start = mine.first().time - 1000
+        // On garde 1,5 s avant le début pour entendre l'attaque du bruit
+        val pre = minOf(histFilled, ((now - start + 1500) * SR / 1000).toInt())
+        val b = ShortBuilder()
+        val from = (histPos - pre + history.size) % history.size
+        for (i in 0 until pre) b.add(history[(from + i) % history.size])
+        val d = best.d!!
+        current = Current(
+            cat, d.index, start, now, d.confidence, max(peak, mine.maxOf { it.above } + floor),
+            mine.maxOf { it.above }, best.top, b,
+        )
+    }
+
     private fun closeCurrent() {
         val c = current ?: return
         current = null
+        // Ses analyses ne doivent pas re-confirmer aussitôt un nouvel événement en double
+        votes.removeAll { it.d?.category == c.category && it.time <= c.last }
         val end = c.last + 1000
         // Extraits provisoires : le tri du matin ne garde que les plus intéressants
         val keepClip = if (c.category == SoundCategory.SNORING) snoreClips++ < MAX_SNORE_CLIPS
@@ -240,6 +300,7 @@ class AudioMonitor(
         val ev = SoundEvent(
             nightId = nightId, start = c.start, end = end, category = c.category.id,
             label = Labels.of(c.index), confidence = c.confidence, peakDb = c.peakDb,
+            top3 = SoundRules.encodeTop(c.top), aboveDb = c.aboveDb,
         )
         onEvent(ev, pcm)
     }
@@ -252,6 +313,8 @@ class AudioMonitor(
         const val MAX_CLIP = SR * 60       // extrait de 60 s au maximum
         const val MAX_SNORE_CLIP = SR * 30 // ronflement : 30 s suffisent
         const val MAX_EVENT_MS = 5 * 60_000L
+        const val VOTE_WINDOW = 12         // 12 analyses = fenêtre de confirmation de 6 s
+        const val FLOOR_CHUNKS = 600       // bruit de fond calculé sur 60 s
         const val END_GAP_MS = 4_000L
         const val MIN_PAUSE_MS = 10_000L
         const val MAX_PAUSE_MS = 60_000L

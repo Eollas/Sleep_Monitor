@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,10 @@ import com.eollas.sleepmonitor.ui.components.GlassChip
 import com.eollas.sleepmonitor.ui.components.Hypnogram
 import com.eollas.sleepmonitor.ui.components.ScoreRing
 import com.eollas.sleepmonitor.ui.theme.Palette
+import com.eollas.sleepmonitor.tracking.Labels
+import com.eollas.sleepmonitor.tracking.SoundRules
+import com.eollas.sleepmonitor.tracking.YamnetNames
+import kotlin.math.roundToInt
 import java.io.File
 
 @Composable
@@ -234,6 +239,15 @@ private fun EventRow(e: SoundEvent) {
                 if (cat == SoundCategory.APNEA) cat.label else "${cat.label} · ${Fmt.duration(e.end - e.start)}",
                 color = Palette.textFaint, fontSize = 12.sp,
             )
+            // Les 3 catégories les plus probables selon le modèle (de la plus à la moins probable)
+            val top = SoundRules.decodeTop(e.top3)
+            if (top.isNotEmpty()) {
+                val names = YamnetNames.get(LocalContext.current)
+                Text(
+                    top.joinToString("  ·  ") { (i, v) -> "${Labels.name(i, names)} ${(v * 100).roundToInt()} %" },
+                    color = Palette.textFaint, fontSize = 11.sp, lineHeight = 14.sp,
+                )
+            }
         }
         if (path != null) {
             Glass(

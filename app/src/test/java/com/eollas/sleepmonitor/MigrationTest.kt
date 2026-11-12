@@ -12,7 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 
-/** Une base créée par la version 1 de l'app doit s'ouvrir sans perte avec la version 2. */
+/** Une base créée par la version 1 de l'app doit s'ouvrir sans perte avec la version actuelle (v3). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class MigrationTest {
@@ -42,7 +42,10 @@ class MigrationTest {
         assertEquals(84, n.score)
         assertEquals(1, n.analysisVersion)
         assertEquals(1, dao.epochs(7).size)
-        assertEquals(1, dao.events(7).size)
+        val ev = dao.events(7).single()
+        assertEquals("Ronflement", ev.label)
+        assertEquals(null, ev.top3)
+        assertEquals(0f, ev.aboveDb, 0f)
         assertEquals(1, dao.outdated(2).size)
     }
 }

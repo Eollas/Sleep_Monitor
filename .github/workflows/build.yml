@@ -18,8 +18,8 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - name: Tests de l'algorithme de sommeil
-        run: ./gradlew testDebugUnitTest --tests '*SleepAnalyzerTest*'
+      - name: Tests (sommeil, sons, base de données)
+        run: ./gradlew testDebugUnitTest --tests '*SleepAnalyzerTest*' --tests '*SoundRulesTest*' --tests '*MigrationTest*'
       - name: Compiler
         run: ./gradlew assembleRelease
       - run: cp app/build/outputs/apk/release/app-release.apk SleepMonitor.apk

@@ -18,7 +18,8 @@ data class AppSettings(
     val retentionDays: Int = 14,      // 0 = toujours
     val audioEnabled: Boolean = true,
     val autoStop: Boolean = true,
-    val sensitivity: Int = 1,         // 0 faible, 1 normale, 2 élevée
+    val sensitivity: Int = 1,         // mouvements : 0 faible, 1 normale, 2 élevée
+    val soundSensitivity: Float = 0.5f, // sons : 0 = moins sensible … 1 = plus sensible
     val wallpaper: String = "nuit",   // nuit, crepuscule, ocean, aurore, custom
     val dim: Float = 0.35f,
     val hcWrite: Boolean = true,
@@ -30,6 +31,7 @@ class SettingsRepo(private val ctx: Context) {
         val audio = booleanPreferencesKey("audio")
         val autoStop = booleanPreferencesKey("autoStop")
         val sens = intPreferencesKey("sens")
+        val soundSens = floatPreferencesKey("soundSens")
         val wallpaper = stringPreferencesKey("wallpaper")
         val dim = floatPreferencesKey("dim")
         val hcWrite = booleanPreferencesKey("hcWrite")
@@ -42,6 +44,8 @@ class SettingsRepo(private val ctx: Context) {
             audioEnabled = p[K.audio] ?: d.audioEnabled,
             autoStop = p[K.autoStop] ?: d.autoStop,
             sensitivity = p[K.sens] ?: d.sensitivity,
+            // Avant le curseur, un seul réglage (faible / normale / élevée) servait aussi aux sons
+            soundSensitivity = p[K.soundSens] ?: when (p[K.sens]) { 0 -> 0.25f; 2 -> 0.75f; else -> d.soundSensitivity },
             wallpaper = p[K.wallpaper] ?: d.wallpaper,
             dim = p[K.dim] ?: d.dim,
             hcWrite = p[K.hcWrite] ?: d.hcWrite,
@@ -55,6 +59,7 @@ class SettingsRepo(private val ctx: Context) {
     suspend fun setAudio(on: Boolean) = set(K.audio, on)
     suspend fun setAutoStop(on: Boolean) = set(K.autoStop, on)
     suspend fun setSensitivity(v: Int) = set(K.sens, v)
+    suspend fun setSoundSensitivity(v: Float) = set(K.soundSens, v.coerceIn(0f, 1f))
     suspend fun setWallpaper(v: String) = set(K.wallpaper, v)
     suspend fun setDim(v: Float) = set(K.dim, v)
     suspend fun setHcWrite(on: Boolean) = set(K.hcWrite, on)

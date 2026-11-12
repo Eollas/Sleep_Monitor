@@ -87,6 +87,11 @@ data class SoundEvent(
     val clipPath: String? = null,
     // Fait partie des « moments de la nuit » gardés le matin
     @ColumnInfo(defaultValue = "0") val highlight: Boolean = false,
+    // Les 3 catégories YAMNet les plus probables, de la plus à la moins probable
+    // (« 38:0.620;36:0.210;494:0.080 », voir SoundRules.encodeTop)
+    val top3: String? = null,
+    // Écart maximal entre le niveau sonore et le bruit de fond pendant l'événement (dB)
+    @ColumnInfo(defaultValue = "0") val aboveDb: Float = 0f,
 )
 
 enum class SoundCategory(val id: Int, val label: String, val color: Long) {

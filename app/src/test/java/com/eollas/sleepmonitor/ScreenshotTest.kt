@@ -75,6 +75,11 @@ class ScreenshotTest {
                     SoundEvent(
                         nightId = id, start = start + min * 60_000L, end = start + min * 60_000L + sec * 1000L,
                         category = cat.id, label = label, confidence = 0.6f, peakDb = 55f + rnd.nextInt(0, 15), clipPath = clip.path,
+                        top3 = when (cat) {
+                            SoundCategory.SNORING -> "38:0.620;36:0.210;494:0.080"
+                            SoundCategory.SPEECH -> "0:0.710;12:0.120;36:0.050"
+                            else -> null
+                        },
                     ),
                 )
             }

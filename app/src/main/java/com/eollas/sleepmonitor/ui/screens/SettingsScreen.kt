@@ -1,6 +1,8 @@
 package com.eollas.sleepmonitor.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -33,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,8 +46,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eollas.sleepmonitor.BuildConfig
@@ -56,6 +61,8 @@ import com.eollas.sleepmonitor.ui.components.GlassChip
 import com.eollas.sleepmonitor.ui.components.SoftSwitch
 import com.eollas.sleepmonitor.ui.components.Wallpapers
 import com.eollas.sleepmonitor.ui.theme.Palette
+import java.io.File
+import kotlin.math.roundToInt
 
 @SuppressLint("BatteryLife")
 @Composable
@@ -120,18 +127,36 @@ fun SettingsScreen(vm: MainViewModel) {
                 }
             }
             Hint("Les extraits plus anciens sont effacés automatiquement. Les statistiques des nuits sont gardées.")
-            Text("Sensibilité", color = Palette.textDim, fontSize = 14.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((v, label) in listOf(0 to "Faible", 1 to "Normale", 2 to "Élevée")) {
-                    GlassChip(label, s.sensitivity == v, { vm.setSensitivity(v) })
-                }
+            Text("Sensibilité aux bruits", color = Palette.textDim, fontSize = 14.sp)
+            // Valeur locale pendant le glissement : enregistrée seulement au lâcher du curseur
+            var sound by remember(s.soundSensitivity) { mutableFloatStateOf(s.soundSensitivity) }
+            Slider(
+                value = sound, onValueChange = { sound = it }, onValueChangeFinished = { vm.setSoundSensitivity(sound) },
+                valueRange = 0f..1f,
+                colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accentDeep, inactiveTrackColor = Color.White.copy(alpha = 0.12f)),
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Text("Moins sensible", color = Palette.textFaint, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text("${(sound * 100).roundToInt()} %", color = Palette.text, fontSize = 12.sp)
+                Text("Plus sensible", color = Palette.textFaint, fontSize = 12.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
             }
+            Hint(
+                "Moins sensible : seuls les sons nets et répétés sont retenus. Plus sensible : les sons faibles " +
+                    "ou brefs aussi, avec plus de fausses détections. Pris en compte à la prochaine nuit.",
+            )
             SettingRow("Extraits enregistrés", Fmt.size(vm.clipsSize)) {
                 GlassButton("Effacer", { confirm = "clips" })
             }
         }
 
-        Card(title = "Détection du réveil") {
+        Card(title = "Détection du sommeil") {
+            Text("Sensibilité aux mouvements", color = Palette.textDim, fontSize = 14.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((v, label) in listOf(0 to "Faible", 1 to "Normale", 2 to "Élevée")) {
+                    GlassChip(label, s.sensitivity == v, { vm.setSensitivity(v) })
+                }
+            }
+            Hint("Plus elle est élevée, plus de petits mouvements comptent comme de l'éveil.")
             SettingRow(
                 "Arrêt automatique au réveil",
                 "Quand vous prenez le téléphone en main le matin (après au moins 3 h de sommeil)",
@@ -188,6 +213,18 @@ fun SettingsScreen(vm: MainViewModel) {
 
         UpdateCard(vm)
 
+        Card(title = "Mes données") {
+            Hint(
+                "Crée un fichier ZIP avec toutes vos nuits (tableaux lisibles dans Excel) et les extraits audio " +
+                    "encore conservés. Vous choisissez ensuite où l'envoyer : rien ne part sans votre action.",
+            )
+            GlassButton(
+                if (vm.exporting) "Préparation…" else "Exporter mes données",
+                { vm.exportData { f -> shareFile(ctx, f) } }, Modifier.fillMaxWidth(),
+            )
+            vm.exportError?.let { Text(it, color = Palette.warn, fontSize = 13.sp) }
+        }
+
         Card(title = "Confidentialité") {
             Hint(
                 "Tout reste sur ce téléphone : nuits, sons et données de santé ne sont jamais envoyés. " +
@@ -208,6 +245,19 @@ fun SettingsScreen(vm: MainViewModel) {
             vm.deleteEverything()
         }
     }
+}
+
+/** Ouvre le menu Partager d'Android avec le fichier d'export. */
+private fun shareFile(ctx: Context, f: File) {
+    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".export", f)
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "application/zip"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, f.nameWithoutExtension)
+        clipData = ClipData.newRawUri(f.name, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching { ctx.startActivity(Intent.createChooser(send, "Exporter mes données")) }
 }
 
 @Composable
