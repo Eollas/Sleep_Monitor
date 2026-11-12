@@ -40,6 +40,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var hcGranted by mutableStateOf<Set<String>>(emptySet()); private set
     var batteryOk by mutableStateOf(true); private set
     var clipsSize by mutableLongStateOf(0L); private set
+    var clips by mutableStateOf(Repository.ClipsStats()); private set
     var resumeTick by mutableIntStateOf(0); private set
     var openNight by mutableStateOf<Long?>(null)
     var update by mutableStateOf(UpdateUi()); private set
@@ -99,13 +100,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             hcAvailable = repo.health.available
             hcGranted = repo.health.granted()
-            clipsSize = withContext(Dispatchers.IO) { repo.clipsSize() }
+        }
+        refreshClips()
+    }
+
+    /** Recalcule la place prise par les extraits audio (ouverture des Réglages, retour dans l'app). */
+    fun refreshClips() {
+        viewModelScope.launch {
+            clips = withContext(Dispatchers.IO) { repo.clipsStats() }
+            clipsSize = clips.bytes
         }
     }
 
     fun setRetention(d: Int) = viewModelScope.launch {
         repo.settings.setRetention(d)
-        withContext(Dispatchers.IO) { repo.cleanClips(d); clipsSize = repo.clipsSize() }
+        withContext(Dispatchers.IO) { repo.cleanClips(d) }
+        refreshClips()
     }
     fun setAudio(on: Boolean) = viewModelScope.launch { repo.settings.setAudio(on) }
     fun setAutoStop(on: Boolean) = viewModelScope.launch { repo.settings.setAutoStop(on) }
@@ -145,7 +155,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteNight(id: Long) = viewModelScope.launch(Dispatchers.IO) {
         repo.deleteNight(id)
-        clipsSize = repo.clipsSize()
+        refreshClips()
     }
 
     /** Prépare le ZIP de toutes les nuits, puis [onReady] ouvre le menu Partager. */
@@ -161,11 +171,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteAllClips() = viewModelScope.launch(Dispatchers.IO) {
-        repo.deleteAllClips(); clipsSize = 0
+        repo.deleteAllClips(); refreshClips()
     }
 
     fun deleteEverything() = viewModelScope.launch(Dispatchers.IO) {
-        repo.deleteEverything(); clipsSize = 0
+        repo.deleteEverything(); refreshClips()
     }
 }
 

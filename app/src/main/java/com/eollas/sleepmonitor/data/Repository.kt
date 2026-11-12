@@ -183,7 +183,15 @@ class Repository(private val ctx: Context) {
         clipsRoot.deleteRecursively()
     }
 
-    fun clipsSize(): Long = clipsRoot.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    fun clipsSize(): Long = clipsStats().bytes
+
+    /** Extraits audio présents sur le téléphone : nombre, taille totale, nombre de nuits. */
+    data class ClipsStats(val count: Int = 0, val bytes: Long = 0, val nights: Int = 0)
+
+    fun clipsStats(): ClipsStats {
+        val files = clipsRoot.walkTopDown().filter { it.isFile }.toList()
+        return ClipsStats(files.size, files.sumOf { it.length() }, files.mapNotNull { it.parentFile?.name }.toSet().size)
+    }
 
     suspend fun deleteNight(id: Long) {
         File(clipsRoot, id.toString()).deleteRecursively()
