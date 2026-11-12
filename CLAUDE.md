@@ -39,6 +39,8 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
   l'écart au fond (`aboveDb`). Tests : `SoundRulesTest`.
   Pause respiratoire possible = ≥ 3 ronflements dans la minute, puis 10-60 s
   sans souffle, puis reprise brusque (halètement / reniflement / ronflement fort).
+  « Souffle » = respiration/ronflement reconnu OU niveau ≥ fond + 5 dB
+  (`BREATH_DB`) : la respiration calme n'est pas toujours nommée par YAMNet.
   Extraits AAC `.m4a` provisoires dans `files/clips/{nuit}/` ; le matin
   `analysis/Highlights` garde 10-20 « moments de la nuit » (pauses, somniloquie
   pendant le sommeil, ronflements longs, bruits forts), le reste est effacé.
@@ -108,6 +110,13 @@ https://github.com/Eollas/Sleep_Monitor/releases/download/latest/SleepMonitor.ap
 - 12 nov. 2026 : trop de fausses détections → porte sur niveau moyen + fond
   par centile, fenêtre de confirmation 6 s, comparaison au fond, curseur de
   sensibilité, top 3 YAMNet par son, export ZIP de toutes les nuits.
+
+- 12 nov. 2026, analyse du 1er export (3 nuits enregistrées avant 1.0.9, curseur
+  à 75 % car ancien réglage « Élevée ») : YAMNet rejoué sur les 61 extraits →
+  les « paroles », « toux » et « musique » étaient du ronflement, de la
+  respiration ou du silence (toutes rejetées par les nouvelles règles) ; les
+  ronflements sont réels ; 6 « pauses » sur 16 avaient une respiration régulière
+  (bouffées +8-12 dB toutes les 3 s) → règle `BREATH_DB`.
 
 ## Reste à faire / pistes
 

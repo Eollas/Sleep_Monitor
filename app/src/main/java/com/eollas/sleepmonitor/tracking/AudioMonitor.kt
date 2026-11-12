@@ -203,6 +203,23 @@ class AudioMonitor(
      */
     private fun checkBreathing(scores: FloatArray?, d: SoundRules.Detection?, above: Float, peak: Float, now: Long) {
         while (snoreTimes.isNotEmpty() && now - snoreTimes.first() > 90_000L) snoreTimes.removeFirst()
+        // Une bouffée sonore nette au-dessus du fond = un souffle, même si le modèle ne la
+        // reconnaît pas (nuits du 10-12 nov. : respiration régulière toutes les 3 s, à
+        // +8-12 dB, prise à tort pour une pause car YAMNet n'y voyait pas de « respiration »).
+        if (above >= BREATH_DB) {
+            val snore = d?.category == SoundCategory.SNORING
+            if (scores == null) {
+                lastBreath = now
+                return
+            }
+            if (!snore && scores[SoundRules.BREATHING] < 0.2f && scores[SoundRules.GASP] < 0.1f &&
+                scores[SoundRules.SNORT] < 0.15f
+            ) {
+                // Souffle non nommé : pas une « reprise brusque », mais la pause est interrompue
+                lastBreath = now
+                return
+            }
+        }
         if (scores == null) return
         val snore = d?.category == SoundCategory.SNORING
         val breath = snore || scores[SoundRules.BREATHING] >= 0.2f ||
@@ -316,6 +333,7 @@ class AudioMonitor(
         const val VOTE_WINDOW = 12         // 12 analyses = fenêtre de confirmation de 6 s
         const val FLOOR_CHUNKS = 600       // bruit de fond calculé sur 60 s
         const val END_GAP_MS = 4_000L
+        const val BREATH_DB = 5f          // bouffée de souffle : niveau moyen ≥ fond + 5 dB
         const val MIN_PAUSE_MS = 10_000L
         const val MAX_PAUSE_MS = 60_000L
         const val MAX_SNORE_CLIPS = 200
