@@ -4,6 +4,24 @@ Le propriétaire communique en **français** : répondre en français, simplemen
 (il n'est pas développeur à plein temps), commentaires de code en français.
 **Proposer avant de coder**, attendre son feu vert. Il aime les captures d'écran.
 
+## RÈGLE ABSOLUE : jamais d'identifiants en clair
+
+Exigence du propriétaire, valable pour **tous ses projets**, sans aucune
+exception ni « solution temporaire » : aucun identifiant (mot de passe,
+jeton, clé d'API, mot de passe de signature…) ne doit **jamais** circuler
+ni être stocké en clair (HTTP, e-mail, URL, journal, dépôt Git…).
+
+- Réseau : HTTPS uniquement, aucune exception HTTP dans l'appli.
+- Secrets : jamais dans le code ni dans le dépôt (secrets GitHub à la place).
+- **Problème connu, à régler avec le propriétaire** : la clé de signature
+  `keystore/sleepmonitor.jks` et ses mots de passe (`app/build.gradle.kts`)
+  sont publics dans ce dépôt public. N'importe qui peut signer une fausse
+  mise à jour. Les retirer ne suffit pas (ils restent dans l'historique) :
+  il faut une nouvelle clé secrète, et la changer oblige à désinstaller
+  l'appli (données perdues sauf export). Décision au propriétaire.
+- Si une demande ou une contrainte pousse vers une transmission en clair :
+  refuser et le signaler au propriétaire.
+
 ## L'application
 
 App Android (Kotlin, Jetpack Compose, Room, DataStore) pour Redmagic 11 Pro,
