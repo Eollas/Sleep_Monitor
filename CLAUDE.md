@@ -26,13 +26,27 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 - Sons : `AudioMonitor` (16 kHz) + `SoundClassifier` (YAMNet, `assets/yamnet.tflite`,
   LiteRT) → ronflement / paroles / toux / bruit perturbant / pause respiratoire
   (`SoundRules` ; bruits = liste blanche de sons précis, catégories vagues
-  « Animal », moteur… ignorées ; noms français dans `Labels`).
+  « Animal », moteur… ignorées ; noms français dans `Labels`, noms anglais
+  des 521 catégories dans `assets/yamnet_labels.txt`).
+  Porte : niveau moyen de la dernière seconde vs bruit de fond (15e centile
+  sur 60 s). Analyse toutes les 0,5 s ; un son n'est retenu que s'il est
+  confirmé dans une fenêtre de 6 s (12 analyses : ronflement/paroles 3, toux/
+  bruit 2) et plus probable que le fond (`SoundRules.BACKGROUND` : silence,
+  ventilateur, souffle…). Seuils = curseur « Sensibilité aux bruits » 0..1
+  (`SoundRules.Tuning`, défaut 0,5) ; l'ancien réglage 3 niveaux
+  (`sensitivity`) ne sert plus qu'aux mouvements (`SleepAnalyzer`).
+  Chaque son garde ses 3 catégories YAMNet les plus probables (`top3`) et
+  l'écart au fond (`aboveDb`). Tests : `SoundRulesTest`.
   Pause respiratoire possible = ≥ 3 ronflements dans la minute, puis 10-60 s
   sans souffle, puis reprise brusque (halètement / reniflement / ronflement fort).
   Extraits AAC `.m4a` provisoires dans `files/clips/{nuit}/` ; le matin
   `analysis/Highlights` garde 10-20 « moments de la nuit » (pauses, somniloquie
   pendant le sommeil, ronflements longs, bruits forts), le reste est effacé.
   Conservation réglable (3 j → toujours).
+- Export : Réglages → « Exporter mes données » (`data/Exporter`) : ZIP dans
+  `cache/export/` (CSV « ; » virgule décimale : nuits, tranches 30 s, sons +
+  extraits encore gardés), partagé via le menu Partager (FileProvider) : c'est
+  l'utilisateur qui choisit la destination. Sert à régler les seuils.
 - Arrêt automatique : téléphone pris en main 3 min après ≥ 3 h de sommeil.
 - Mi Fitness : via **Health Connect** (`health/HealthConnectManager`) : lecture
   sommeil + rythme cardiaque, écriture de nos nuits (option).
@@ -52,7 +66,8 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 - GitHub Actions compile l'APK à chaque push ; sur `main`, publié en Release « latest »
   (tag recréé sur le commit compilé, `--target`). Numéro de version = numéro de
   compilation GitHub (1.0.N) ; le bouton « Mettre à jour » compare ce N.
-- Base Room v2 (migration 1→2 testée par `MigrationTest`) : ne jamais casser
+- Base Room v3 (migrations 1→2→3 testées par `MigrationTest`, lancé par la CI ;
+  `schemas/…/3.json` est régénéré par une compilation locale, à committer) : ne jamais casser
   les données existantes, toujours écrire une migration.
 - Clé de signature fixe `keystore/sleepmonitor.jks` : ne pas la changer, sinon
   les mises à jour ne s'installent plus par-dessus.
@@ -90,7 +105,15 @@ https://github.com/Eollas/Sleep_Monitor/releases/download/latest/SleepMonitor.ap
   voile sous la barre d'état. Mise à jour 1.0.4 → 1.0.5 depuis l'app : validée
   sur le téléphone par le propriétaire.
 
+- 12 nov. 2026 : trop de fausses détections → porte sur niveau moyen + fond
+  par centile, fenêtre de confirmation 6 s, comparaison au fond, curseur de
+  sensibilité, top 3 YAMNet par son, export ZIP de toutes les nuits.
+
 ## Reste à faire / pistes
+
+- Analyser l'export de quelques nuits pour régler les seuils ; envisager de
+  sortir Soupir / Gémissement / Grognement / Fredonnement des « paroles » et
+  d'essayer la source micro `UNPROCESSED` / `VOICE_RECOGNITION` (gain auto).
 
 - Retours après les premières nuits réelles : ajuster seuils de mouvement
   (`SleepAnalyzer`) et de sons (`SoundRules`, sensibilité).
