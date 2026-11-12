@@ -34,6 +34,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,8 @@ fun SettingsScreen(vm: MainViewModel) {
     val s by vm.settings.collectAsStateWithLifecycle()
     val live by vm.live.collectAsStateWithLifecycle()
     var confirm by remember { mutableStateOf<String?>(null) }
+    // Taille des enregistrements recalculée à chaque ouverture de la page
+    LaunchedEffect(Unit) { vm.refreshClips() }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) vm.setCustomWallpaper(uri)
@@ -144,7 +147,12 @@ fun SettingsScreen(vm: MainViewModel) {
                 "Moins sensible : seuls les sons nets et répétés sont retenus. Plus sensible : les sons faibles " +
                     "ou brefs aussi, avec plus de fausses détections. Pris en compte à la prochaine nuit.",
             )
-            SettingRow("Extraits enregistrés", Fmt.size(vm.clipsSize)) {
+            val c = vm.clips
+            SettingRow(
+                "Place utilisée par les enregistrements : ${Fmt.size(c.bytes)}",
+                if (c.count == 0) "Aucun extrait audio sur le téléphone"
+                else "${c.count} extrait${if (c.count > 1) "s" else ""} sur ${c.nights} nuit${if (c.nights > 1) "s" else ""}",
+            ) {
                 GlassButton("Effacer", { confirm = "clips" })
             }
         }
