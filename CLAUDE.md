@@ -59,10 +59,23 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
   sans souffle, puis reprise brusque (halètement / reniflement / ronflement fort).
   « Souffle » = respiration/ronflement reconnu OU niveau ≥ fond + 5 dB
   (`BREATH_DB`) : la respiration calme n'est pas toujours nommée par YAMNet.
+  Pause rejetée si on « entend » quand même le souffle dans les bandes 300 Hz-1 kHz
+  et > 3 kHz (filtres `Biquad`) : bouffée ≥ fond de bande + 3 dB (`BAND_BREATH_DB`)
+  coupant le silence sous 10 s, ou rythme régulier 2-6 s (`rhythm` ≥ 0,35).
+  Export du 18 nov. : 37 pauses sur 40 avaient une respiration audible.
+  Réveil : `analysis/AlarmDetector` (le matin) reconnaît la sonnerie (classée
+  « Musique » par YAMNet) : sons rapprochés (< 90 s) qui commencent dans les 25 s
+  après une minute ronde, ou finis < 10 min avant l'arrêt, dans les 4 dernières
+  heures ; une seule sonnerie loin de la fin ne suffit pas. Sonnerie < 20 min
+  après la précédente = « rappel » (réveil repoussé). Catégorie `ALARM` (6) :
+  jamais gardée en extrait, pas comptée dans les bruits, résumée dans « Bruits de
+  la nuit ». La musique ailleurs reste un bruit perturbant. Tests : `AlarmDetectorTest`.
   Extraits AAC `.m4a` provisoires dans `files/clips/{nuit}/` ; le matin
   `analysis/Highlights` garde 10-20 « moments de la nuit » (pauses, somniloquie
   pendant le sommeil, ronflements longs, bruits forts), le reste est effacé.
-  Conservation réglable (3 j → toujours).
+  Conservation réglable (3 j → toujours). Écoute (`ui/ClipPlayer`) : lecture/pause,
+  −5 s / +5 s, toucher ou glisser sur la courbe du son (`ui/Waveforms` décode
+  l'AAC à l'affichage, mise en cache) pour aller à un moment.
 - Export : Réglages → « Exporter mes données » (`data/Exporter`) : ZIP dans
   `cache/export/` (CSV « ; » virgule décimale : nuits, tranches 30 s, sons +
   extraits encore gardés), partagé via le menu Partager (FileProvider) : c'est
@@ -76,7 +89,9 @@ Android 16 (minSdk 34, targetSdk 36). Paquet `com.eollas.sleepmonitor`.
 ## Compiler / tester
 
 - SDK Android dans `/opt/android-sdk` (`local.properties`), environnement cloud
-  « Sleep_Monitor » (accès à dl.google.com).
+  « Sleep_Monitor » (accès à dl.google.com). S'il manque (session du 18 nov.) :
+  télécharger `commandlinetools-linux-…_latest.zip` sur dl.google.com, puis
+  `sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"`.
 - Maven Central renvoie souvent 429 : miroir Google ajouté dans `settings.gradle.kts`.
 - Lint de release local en 429 : `./gradlew assembleRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease`.
 - Captures sans émulateur (pas de KVM) : `ScreenshotTest` (Robolectric + Roborazzi)
@@ -135,6 +150,11 @@ https://github.com/Eollas/Sleep_Monitor/releases/download/latest/SleepMonitor.ap
   respiration ou du silence (toutes rejetées par les nouvelles règles) ; les
   ronflements sont réels ; 6 « pauses » sur 16 avaient une respiration régulière
   (bouffées +8-12 dB toutes les 3 s) → règle `BREATH_DB`.
+
+- 18 nov. 2026, export de 9 nuits : sonnerie du réveil (rappels toutes les 7 min)
+  gardée comme « moment de la nuit » → détection du réveil ; fausses pauses
+  (respiration audible) → analyse par bandes + rythme ; lecteur avec avance /
+  recul et courbe du son. `VERSION` 3 (nuits recalculées → réveil reconnu).
 
 ## Reste à faire / pistes
 

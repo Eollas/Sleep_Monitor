@@ -31,5 +31,7 @@ interface SleepDao {
     @Query("SELECT * FROM sound_events WHERE clipPath IS NOT NULL AND start < :before") suspend fun clipsBefore(before: Long): List<SoundEvent>
     @Query("SELECT * FROM sound_events WHERE clipPath IS NOT NULL") suspend fun allClips(): List<SoundEvent>
     @Query("UPDATE sound_events SET clipPath = NULL WHERE id = :id") suspend fun clearClip(id: Long)
+    @Query("UPDATE sound_events SET category = :category, label = :label WHERE id = :id")
+    suspend fun setCategory(id: Long, category: Int, label: String)
     @Query("UPDATE sound_events SET highlight = :h WHERE id = :id") suspend fun setHighlight(id: Long, h: Boolean)
 }

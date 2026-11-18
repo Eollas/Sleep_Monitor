@@ -43,6 +43,16 @@ class AudioMonitor(
     private var floorFilled = 0
     private val floorSorted = FloatArray(FLOOR_CHUNKS)
     private var floor = 40f
+    // Énergie du souffle : bandes 300 Hz-1 kHz et > 3 kHz, où la respiration calme ressort
+    // nettement mieux que dans le niveau global (export du 18 nov. 2026 : souffle à
+    // +3-5 dB seulement au niveau global, invisible pour la règle BREATH_DB).
+    private val bandPass = Biquad.bandPass(550.0, 0.8)
+    private val highPass = Biquad.highPass(3000.0, 0.707)
+    private val bandHist = FloatArray(HISTORY_S * 10)
+    private var bandPos = 0
+    private var bandFilled = 0
+    private val bandSorted = FloatArray(FLOOR_CHUNKS)
+    private var bandFloor = 0f
     private val recentDb = ArrayDeque<Float>()
     private val recentEnergy = ArrayDeque<Double>()
     private var sinceInfer = 0
@@ -147,6 +157,15 @@ class AudioMonitor(
         floorHist[floorPos] = db
         floorPos = (floorPos + 1) % FLOOR_CHUNKS
         floorFilled = minOf(FLOOR_CHUNKS, floorFilled + 1)
+        var be = 0.0
+        for (s in chunk) {
+            val v = s.toDouble()
+            val a = bandPass.next(v); val h = highPass.next(v)
+            be += a * a + h * h
+        }
+        bandHist[bandPos] = toDb(sqrt(be / chunk.size))
+        bandPos = (bandPos + 1) % bandHist.size
+        bandFilled = minOf(bandHist.size, bandFilled + 1)
         recentDb.addLast(db); if (recentDb.size > 10) recentDb.removeFirst()
         recentEnergy.addLast(e / chunk.size); if (recentEnergy.size > 10) recentEnergy.removeFirst()
 
@@ -194,6 +213,11 @@ class AudioMonitor(
         floorHist.copyInto(floorSorted, 0, 0, n)
         floorSorted.sort(0, n)
         floor = floorSorted[(n * 15 / 100).coerceAtMost(n - 1)]
+        // Même calcul pour le fond dans les bandes du souffle (dernière minute)
+        val m = minOf(bandFilled, FLOOR_CHUNKS)
+        for (i in 0 until m) bandSorted[i] = bandHist[(bandPos - m + i + bandHist.size) % bandHist.size]
+        bandSorted.sort(0, m)
+        if (m > 0) bandFloor = bandSorted[(m * 15 / 100).coerceAtMost(m - 1)]
     }
 
     /**
@@ -229,7 +253,9 @@ class AudioMonitor(
         val snoringBefore = snoreTimes.count { it in (lastBreath - 60_000L)..lastBreath } >= 3
         val brusque = scores[SoundRules.GASP] >= 0.1f || scores[SoundRules.SNORT] >= 0.15f ||
             (snore && above >= 12f)
-        if (lastBreath > 0 && gap in MIN_PAUSE_MS..MAX_PAUSE_MS && snoringBefore && brusque && apnea == null) {
+        if (lastBreath > 0 && gap in MIN_PAUSE_MS..MAX_PAUSE_MS && snoringBefore && brusque && apnea == null &&
+            silentBreath(gap)
+        ) {
             // On garde 5 s avant la pause, toute la pause, et 4 s après la reprise
             val wanted = ((gap + 5_000L) * SR / 1000).toInt().coerceAtMost(histFilled)
             val b = ShortBuilder()
@@ -239,6 +265,28 @@ class AudioMonitor(
         }
         if (snore) snoreTimes.addLast(now)
         lastBreath = now
+    }
+
+    /**
+     * Vérifie dans les bandes du souffle que le « silence » de [gapMs] en est vraiment un :
+     * - au moins 10 s d'affilée sans bouffée (niveau sur 0,3 s ≥ fond + 3 dB) ;
+     * - pas de rythme régulier de 2 à 6 s (respiration calme : une bouffée toutes les ~3 s).
+     * Sur les 41 pauses de l'export du 18 nov., ~32 avaient une respiration audible.
+     */
+    private fun silentBreath(gapMs: Long): Boolean {
+        // On écarte la fin du dernier souffle (0,5 s) et la reprise (1,5 s)
+        val total = (gapMs / 100).toInt().coerceAtMost(bandFilled)
+        val n = total - 20
+        if (n < MIN_PAUSE_MS / 100) return false
+        val seg = FloatArray(n) { bandHist[(bandPos - 15 - n + it + 2 * bandHist.size) % bandHist.size] }
+        // Plus long passage sans bouffée
+        var run = 0; var longest = 0
+        for (i in seg.indices) {
+            val a = seg[(i - 1).coerceAtLeast(0)]; val b = seg[i]; val c = seg[(i + 1).coerceAtMost(n - 1)]
+            if ((a + b + c) / 3 >= bandFloor + BAND_BREATH_DB) run = 0 else { run++; longest = max(longest, run) }
+        }
+        if (longest * 100L < MIN_PAUSE_MS) return false
+        return rhythm(seg) < RHYTHM
     }
 
     private fun flushApnea(force: Boolean, now: Long = System.currentTimeMillis()) {
@@ -334,11 +382,34 @@ class AudioMonitor(
         const val FLOOR_CHUNKS = 600       // bruit de fond calculé sur 60 s
         const val END_GAP_MS = 4_000L
         const val BREATH_DB = 5f          // bouffée de souffle : niveau moyen ≥ fond + 5 dB
+        const val BAND_BREATH_DB = 3f      // bouffée dans les bandes du souffle : fond + 3 dB
+        const val RHYTHM = 0.35f           // au-delà : respiration régulière, pas une pause
         const val MIN_PAUSE_MS = 10_000L
         const val MAX_PAUSE_MS = 60_000L
         const val MAX_SNORE_CLIPS = 200
         const val MAX_OTHER_CLIPS = 200
         private const val TAG = "AudioMonitor"
+
+        /**
+         * Régularité d'une enveloppe (pas de 0,1 s) : autocorrélation maximale
+         * pour une période de 2 à 6 s. Proche de 1 = très régulier.
+         */
+        fun rhythm(env: FloatArray): Float {
+            val n = env.size
+            if (n < 80) return 0f
+            val mean = env.average()
+            val d = DoubleArray(n) { env[it] - mean }
+            var e0 = 0.0
+            for (v in d) e0 += v * v
+            if (e0 <= 0.0) return 0f
+            var best = 0.0
+            for (lag in 20..minOf(60, n / 2)) {
+                var s = 0.0
+                for (i in 0 until n - lag) s += d[i] * d[i + lag]
+                best = maxOf(best, s / e0)
+            }
+            return best.toFloat()
+        }
 
         /** Niveau approximatif en dB (calé pour un micro de téléphone). */
         fun toDb(rms: Double): Float = (20 * log10(rms / 32768.0 + 1e-9) + 100).toFloat().coerceIn(0f, 120f)
@@ -354,4 +425,32 @@ class ShortBuilder {
     private fun ensure(n: Int) { if (n > data.size) data = data.copyOf(maxOf(n, data.size * 2)) }
     fun toArray(n: Int = size): ShortArray = data.copyOf(n.coerceAtMost(size))
     private companion object { const val SR_INIT = 16_000 * 8 }
+}
+
+/** Filtre audio simple (biquad, formules classiques « Audio EQ Cookbook »), 16 kHz. */
+class Biquad private constructor(
+    private val b0: Double, private val b1: Double, private val b2: Double,
+    private val a1: Double, private val a2: Double,
+) {
+    private var x1 = 0.0; private var x2 = 0.0; private var y1 = 0.0; private var y2 = 0.0
+
+    fun next(x: Double): Double {
+        val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2 = x1; x1 = x; y2 = y1; y1 = y
+        return y
+    }
+
+    companion object {
+        private const val FS = 16_000.0
+
+        fun bandPass(f0: Double, q: Double): Biquad {
+            val w = 2 * Math.PI * f0 / FS; val al = Math.sin(w) / (2 * q); val a0 = 1 + al
+            return Biquad(al / a0, 0.0, -al / a0, -2 * Math.cos(w) / a0, (1 - al) / a0)
+        }
+
+        fun highPass(f0: Double, q: Double): Biquad {
+            val w = 2 * Math.PI * f0 / FS; val c = Math.cos(w); val al = Math.sin(w) / (2 * q); val a0 = 1 + al
+            return Biquad((1 + c) / 2 / a0, -(1 + c) / a0, (1 + c) / 2 / a0, -2 * c / a0, (1 - al) / a0)
+        }
+    }
 }

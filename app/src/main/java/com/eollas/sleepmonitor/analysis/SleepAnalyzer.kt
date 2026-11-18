@@ -12,7 +12,7 @@ object SleepAnalyzer {
     const val EPOCH_MS = 30_000L
 
     /** Augmenter quand l'analyse change : les anciennes nuits seront recalculées. */
-    const val VERSION = 2
+    const val VERSION = 3
 
     /** Temps minimal entre le coucher et l'endormissement. */
     private const val MIN_LATENCY_MS = 5 * 60_000L

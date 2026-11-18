@@ -154,7 +154,7 @@ class SleepTrackingService : LifecycleService() {
             val to = ((e - startTime) / SleepAnalyzer.EPOCH_MS).toInt().coerceAtMost(n - 1)
             for (i in from..to) {
                 when (SoundCategory.of(cat)) {
-                    SoundCategory.SPEECH, SoundCategory.NOISE -> busy[i] = true
+                    SoundCategory.SPEECH, SoundCategory.NOISE, SoundCategory.ALARM -> busy[i] = true
                     SoundCategory.SNORING, SoundCategory.APNEA -> snore[i] = true
                     else -> {}
                 }
@@ -194,6 +194,7 @@ class SleepTrackingService : LifecycleService() {
                 SoundCategory.COUGH -> it.copy(cough = it.cough + 1, lastEvent = ev.label)
                 SoundCategory.NOISE -> it.copy(noise = it.noise + 1, lastEvent = ev.label)
                 SoundCategory.APNEA -> it.copy(apnea = it.apnea + 1, lastEvent = ev.label)
+                SoundCategory.ALARM -> it.copy(lastEvent = ev.label)
             }
         }
         (application as SleepApp).scope.launch {

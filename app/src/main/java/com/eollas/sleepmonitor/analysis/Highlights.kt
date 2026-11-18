@@ -11,7 +11,7 @@ object Highlights {
     const val MAX = 20
     const val MIN_SNORE_MS = 20_000L
 
-    /** Part maximale de chaque catégorie, par ordre d'importance. */
+    /** Part maximale de chaque catégorie, par ordre d'importance (le réveil n'y est pas). */
     private val caps = listOf(
         SoundCategory.APNEA to 8,
         SoundCategory.SPEECH to 6,
@@ -32,6 +32,7 @@ object Highlights {
             SoundCategory.SNORING -> minOf(dur, 300.0) + e.peakDb * 0.5
             SoundCategory.COUGH -> e.peakDb.toDouble()
             SoundCategory.NOISE -> e.peakDb + e.confidence * 20.0
+            SoundCategory.ALARM -> 0.0 // jamais gardé : la sonnerie du réveil n'intéresse personne
         }
     }
 
