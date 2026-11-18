@@ -3,6 +3,9 @@
 Le propriétaire communique en **français** : répondre en français, simplement
 (il n'est pas développeur à plein temps), commentaires de code en français.
 **Proposer avant de coder**, attendre son feu vert. Il aime les captures d'écran.
+**Réponses très courtes, peu bavardes** (demande du 18 nov. 2026, valable pour
+tous ses projets) : seulement les actions à faire, en liste minimale, sans
+explications ni tutoriels ; il demandera s'il veut plus.
 
 ## RÈGLE ABSOLUE : jamais d'identifiants en clair
 
