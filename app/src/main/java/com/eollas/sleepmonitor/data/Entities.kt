@@ -99,7 +99,9 @@ enum class SoundCategory(val id: Int, val label: String, val color: Long) {
     SPEECH(2, "Paroles", 0xFF6FC3DF),
     COUGH(3, "Toux", 0xFFE9B872),
     NOISE(4, "Bruit perturbant", 0xFFE57B7B),
-    APNEA(5, "Pause respiratoire", 0xFFFF8A65);
+    APNEA(5, "Pause respiratoire", 0xFFFF8A65),
+    // Sonnerie du réveil, reconnue le matin (voir analysis/AlarmDetector)
+    ALARM(6, "Réveil", 0xFFF2D06B);
 
     companion object {
         fun of(id: Int) = entries.firstOrNull { it.id == id } ?: NOISE

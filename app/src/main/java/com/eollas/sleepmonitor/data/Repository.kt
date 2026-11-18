@@ -1,6 +1,7 @@
 package com.eollas.sleepmonitor.data
 
 import android.content.Context
+import com.eollas.sleepmonitor.analysis.AlarmDetector
 import com.eollas.sleepmonitor.analysis.Highlights
 import com.eollas.sleepmonitor.analysis.SleepAnalyzer
 import com.eollas.sleepmonitor.health.HealthConnectManager
@@ -30,7 +31,7 @@ class Repository(private val ctx: Context) {
     private suspend fun analyze(night: Night, interrupted: Boolean): Night {
         val end = night.endTime ?: night.startTime
         val epochs = dao.epochs(night.id)
-        val all = dao.events(night.id)
+        val all = markAlarm(dao.events(night.id), end)
         // Anciennes détections trop vagues (« Animal »…) : ignorées
         val events = all.filterNot { it.category == SoundCategory.NOISE.id && it.label in LEGACY_IGNORED }
         val s = settings.current()
@@ -92,6 +93,30 @@ class Repository(private val ctx: Context) {
         return updated
     }
 
+    /**
+     * Reconnaît la sonnerie du réveil (et ses rappels) et l'enregistre en base.
+     * Un son qui n'est plus reconnu comme le réveil redevient « Musique ».
+     */
+    private suspend fun markAlarm(events: List<SoundEvent>, end: Long): List<SoundEvent> {
+        val res = AlarmDetector.detect(events, end)
+        val label = HashMap<Long, String>()
+        for ((i, r) in res.rings.withIndex()) {
+            val n = res.snoozeIndex[i]
+            val gap = if (n > 0) r.start - res.rings[i - 1].start else null
+            for (e in r.events) label[e.id] = AlarmDetector.label(n, gap)
+        }
+        return events.map { e ->
+            val l = label[e.id]
+            val updated = when {
+                l != null -> e.copy(category = SoundCategory.ALARM.id, label = l)
+                e.category == SoundCategory.ALARM.id -> e.copy(category = SoundCategory.NOISE.id, label = AlarmDetector.ORIGINAL)
+                else -> e
+            }
+            if (updated != e) dao.setCategory(e.id, updated.category, updated.label)
+            updated
+        }
+    }
+
     /** Indices par tranche : écran allumé, paroles / bruits (activité), ronflement. */
     private fun flags(epochs: List<Epoch>, events: List<SoundEvent>): SleepAnalyzer.Flags {
         val n = epochs.size
@@ -105,7 +130,7 @@ class Repository(private val ctx: Context) {
                 val to = ((e.end - t0) / SleepAnalyzer.EPOCH_MS).toInt().coerceAtMost(n - 1)
                 for (i in from..to) {
                     when (cat) {
-                        SoundCategory.SPEECH, SoundCategory.NOISE -> busy[i] = true
+                        SoundCategory.SPEECH, SoundCategory.NOISE, SoundCategory.ALARM -> busy[i] = true
                         SoundCategory.SNORING, SoundCategory.APNEA -> snore[i] = true
                         else -> {}
                     }

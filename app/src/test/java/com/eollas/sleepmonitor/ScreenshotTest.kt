@@ -16,6 +16,11 @@ import com.eollas.sleepmonitor.data.Repository
 import com.eollas.sleepmonitor.data.SoundCategory
 import com.eollas.sleepmonitor.data.SoundEvent
 import com.eollas.sleepmonitor.tracking.Live
+import com.eollas.sleepmonitor.ui.ClipPlayer
+import com.eollas.sleepmonitor.ui.Waveforms
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import org.robolectric.shadows.ShadowMediaPlayer
+import org.robolectric.shadows.util.DataSource
 import com.eollas.sleepmonitor.tracking.LiveState
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
@@ -69,11 +74,14 @@ class ScreenshotTest {
             }
             dao.insertEpochs(epochs)
             var k = 0
-            suspend fun ev(min: Int, cat: SoundCategory, label: String, sec: Int) {
+            suspend fun at(t0: Long, cat: SoundCategory, label: String, sec: Int) {
                 val clip = File(ctx.filesDir, "clips/$id/${k++}.m4a").apply { parentFile?.mkdirs(); writeBytes(ByteArray(10)) }
+                // Courbe du son fictive (le décodage AAC n'existe pas sous Robolectric)
+                Waveforms.cache.put(clip.path, fakeWave(rnd, cat))
+                ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(clip.path), ShadowMediaPlayer.MediaInfo(sec * 1000 + 5000, 0))
                 dao.insertEvent(
                     SoundEvent(
-                        nightId = id, start = start + min * 60_000L, end = start + min * 60_000L + sec * 1000L,
+                        nightId = id, start = t0, end = t0 + sec * 1000L,
                         category = cat.id, label = label, confidence = 0.6f, peakDb = 55f + rnd.nextInt(0, 15), clipPath = clip.path,
                         top3 = when (cat) {
                             SoundCategory.SNORING -> "38:0.620;36:0.210;494:0.080"
@@ -83,6 +91,7 @@ class ScreenshotTest {
                     ),
                 )
             }
+            suspend fun ev(min: Int, cat: SoundCategory, label: String, sec: Int) = at(start + min * 60_000L, cat, label, sec)
             ev(2, SoundCategory.SPEECH, "Paroles", 4)
             for (j in 0 until 40) ev(90 + j * 3, SoundCategory.SNORING, "Ronflement", 5 + rnd.nextInt(0, 200))
             ev(140, SoundCategory.APNEA, "Pause respiratoire (14 s)", 14)
@@ -91,10 +100,25 @@ class ScreenshotTest {
             ev(240, SoundCategory.COUGH, "Toux", 3)
             ev(300, SoundCategory.NOISE, "Moto", 12)
             ev(410, SoundCategory.NOISE, "Chien", 5)
-            repo.finish(id, start + n * SleepAnalyzer.EPOCH_MS)
+            // Réveil : sonnerie à une minute ronde, repoussée deux fois (toutes les 7 min)
+            val end = start + n * SleepAnalyzer.EPOCH_MS
+            val ring = (end - 25 * 60_000L) / 60_000L * 60_000L + 12_000L
+            for (r in 0 until 3) at(ring + r * 7 * 60_000L, SoundCategory.NOISE, "Musique", 15)
+            repo.finish(id, end)
             lastId = id
         }
         lastId
+    }
+
+    private fun fakeWave(rnd: Random, cat: SoundCategory): FloatArray = FloatArray(Waveforms.BARS) { i ->
+        val x = i / Waveforms.BARS.toFloat()
+        when (cat) {
+            // Pause : ronflement, silence, reprise brusque
+            SoundCategory.APNEA -> if (x < 0.15f) 0.5f + rnd.nextFloat() * 0.4f else if (x < 0.8f) 0.05f + rnd.nextFloat() * 0.05f else 0.7f + rnd.nextFloat() * 0.3f
+            // Ronflement : bouffées régulières
+            SoundCategory.SNORING -> 0.15f + 0.75f * maxOf(0f, kotlin.math.sin(i * 0.55f)) * (0.7f + rnd.nextFloat() * 0.3f)
+            else -> (0.1f + rnd.nextFloat() * 0.9f) * (if (x in 0.2f..0.7f) 1f else 0.3f)
+        }
     }
 
     private fun settle() {
@@ -113,8 +137,20 @@ class ScreenshotTest {
 
         compose.onNodeWithText("Voir").performClick(); settle()
         compose.onRoot().captureRoboImage("$out/3_recap.png")
+        compose.onNode(androidx.compose.ui.test.hasText("Réveil : 1re sonnerie", substring = true)).performScrollTo(); settle()
+        compose.onRoot().captureRoboImage("$out/3a_bruits_reveil.png")
         compose.onNode(androidx.compose.ui.test.hasText("Voir tous les sons", substring = true)).performScrollTo(); settle()
         compose.onRoot().captureRoboImage("$out/3b_moments.png")
+        // Écoute d'un extrait : courbe, partie jouée, boutons −5 s / +5 s
+        compose.onAllNodesWithContentDescription("Écouter")[1].performScrollTo().performClick()
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(800)
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(9))
+        compose.mainClock.advanceTimeBy(200)
+        compose.mainClock.autoAdvance = true
+        settle()
+        compose.onRoot().captureRoboImage("$out/3c_ecoute.png")
+        ClipPlayer.stop()
         compose.activity.onBackPressedDispatcher.onBackPressed(); settle()
 
         compose.onNodeWithText("Mes nuits").performClick(); settle()

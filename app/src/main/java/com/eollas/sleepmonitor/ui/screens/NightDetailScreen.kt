@@ -1,6 +1,10 @@
 package com.eollas.sleepmonitor.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,20 +35,28 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.eollas.sleepmonitor.analysis.AlarmDetector
 import com.eollas.sleepmonitor.analysis.SleepAnalyzer
 import com.eollas.sleepmonitor.data.Night
 import com.eollas.sleepmonitor.data.SoundCategory
 import com.eollas.sleepmonitor.data.SoundEvent
 import com.eollas.sleepmonitor.ui.ClipPlayer
+import com.eollas.sleepmonitor.ui.Waveforms
 import com.eollas.sleepmonitor.ui.Fmt
 import com.eollas.sleepmonitor.ui.MainViewModel
 import com.eollas.sleepmonitor.ui.components.ActivityChart
@@ -59,6 +71,9 @@ import com.eollas.sleepmonitor.tracking.SoundRules
 import com.eollas.sleepmonitor.tracking.YamnetNames
 import kotlin.math.roundToInt
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @Composable
 fun NightDetailScreen(vm: MainViewModel, id: Long, onBack: () -> Unit) {
@@ -198,6 +213,18 @@ private fun SoundsCard(n: Night, events: List<SoundEvent>, showAll: Boolean, onT
             Stat("Bruits", "${n.noiseCount}", Modifier.weight(1f))
             Spacer(Modifier.weight(1f))
         }
+        AlarmDetector.summary(events)?.let { a ->
+            val txt = buildString {
+                append("Réveil : 1re sonnerie à ${Fmt.clock(a.first)}")
+                if (a.snoozes > 0) {
+                    append(", repoussé ${a.snoozes} fois (dernière sonnerie à ${Fmt.clock(a.last)}, ")
+                    append("+${Fmt.hm(((a.last - a.first + 30_000) / 60_000).toInt())})")
+                }
+                if (a.rings > a.snoozes + 1) append(" · ${a.rings} sonneries en tout")
+                append(". Les sonneries ne sont pas gardées en extrait.")
+            }
+            Hint(txt)
+        }
         if (n.apneaCount > 0) {
             Hint(
                 "Pause respiratoire possible = ronflement, silence d'au moins 10 s puis reprise brusque du souffle. " +
@@ -230,37 +257,103 @@ private fun SoundsCard(n: Night, events: List<SoundEvent>, showAll: Boolean, onT
 private fun EventRow(e: SoundEvent) {
     val cat = SoundCategory.of(e.category)
     val path = e.clipPath?.takeIf { File(it).exists() }
-    val playing = ClipPlayer.playingId == e.id
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).background(Color(cat.color), CircleShape))
-        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-            Text("${Fmt.clock(e.start)}  ${e.label}", color = Palette.text, fontSize = 15.sp)
-            Text(
-                if (cat == SoundCategory.APNEA) cat.label else "${cat.label} · ${Fmt.duration(e.end - e.start)}",
-                color = Palette.textFaint, fontSize = 12.sp,
-            )
-            // Les 3 catégories les plus probables selon le modèle (de la plus à la moins probable)
-            val top = SoundRules.decodeTop(e.top3)
-            if (top.isNotEmpty()) {
-                val names = YamnetNames.get(LocalContext.current)
+    val active = ClipPlayer.activeId == e.id
+    val playing = active && ClipPlayer.playing
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).background(Color(cat.color), CircleShape))
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("${Fmt.clock(e.start)}  ${e.label}", color = Palette.text, fontSize = 15.sp)
                 Text(
-                    top.joinToString("  ·  ") { (i, v) -> "${Labels.name(i, names)} ${(v * 100).roundToInt()} %" },
-                    color = Palette.textFaint, fontSize = 11.sp, lineHeight = 14.sp,
+                    if (cat == SoundCategory.APNEA) cat.label else "${cat.label} · ${Fmt.duration(e.end - e.start)}",
+                    color = Palette.textFaint, fontSize = 12.sp,
                 )
+                // Les 3 catégories les plus probables selon le modèle (de la plus à la moins probable)
+                val top = SoundRules.decodeTop(e.top3)
+                if (top.isNotEmpty()) {
+                    val names = YamnetNames.get(LocalContext.current)
+                    Text(
+                        top.joinToString("  ·  ") { (i, v) -> "${Labels.name(i, names)} ${(v * 100).roundToInt()} %" },
+                        color = Palette.textFaint, fontSize = 11.sp, lineHeight = 14.sp,
+                    )
+                }
+            }
+            if (path != null) {
+                Glass(
+                    Modifier.size(42.dp), shape = CircleShape,
+                    tint = if (playing) Palette.accentDeep.copy(alpha = 0.6f) else Color(0x22101530),
+                    onClick = { ClipPlayer.toggle(e.id, path) },
+                ) {
+                    Icon(
+                        if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                        if (playing) "Pause" else "Écouter",
+                        tint = Palette.text, modifier = Modifier.align(Alignment.Center),
+                    )
+                }
             }
         }
-        if (path != null) {
-            Glass(
-                Modifier.size(42.dp), shape = CircleShape,
-                tint = if (playing) Palette.accentDeep.copy(alpha = 0.6f) else Color(0x22101530),
-                onClick = { ClipPlayer.toggle(e.id, path) },
-            ) {
-                Icon(
-                    if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                    if (playing) "Pause" else "Écouter",
-                    tint = Palette.text, modifier = Modifier.align(Alignment.Center),
-                )
-            }
+        if (path != null) ClipWave(e.id, path, active, Color(cat.color))
+    }
+}
+
+/**
+ * Courbe du son de l'extrait. Toucher ou glisser le doigt dessus = aller à ce moment.
+ * Pendant l'écoute : partie déjà jouée colorée, boutons −5 s / +5 s et temps écoulé.
+ */
+@Composable
+private fun ClipWave(id: Long, path: String, active: Boolean, color: Color) {
+    val bars by produceState(Waveforms.cache.get(path), path) {
+        if (value == null) value = withContext(Dispatchers.IO) { Waveforms.load(path) }
+    }
+    var pos by remember { mutableStateOf(0 to 0) }
+    LaunchedEffect(active) {
+        while (active) {
+            pos = ClipPlayer.position()
+            delay(50)
+        }
+        pos = 0 to 0
+    }
+    val progress = if (pos.second > 0) pos.first.toFloat() / pos.second else 0f
+    val seek = Modifier
+        .pointerInput(id, path) { detectTapGestures { o -> ClipPlayer.seekTo(id, path, o.x / size.width) } }
+        .pointerInput(id, path) {
+            detectHorizontalDragGestures { change, _ -> ClipPlayer.seekTo(id, path, change.position.x / size.width) }
+        }
+    val b = bars
+    Canvas(Modifier.fillMaxWidth().padding(start = 22.dp, top = 8.dp).height(38.dp).then(seek)) {
+        val n = b?.size ?: Waveforms.BARS
+        val w = size.width / n
+        for (i in 0 until n) {
+            val h = (b?.get(i) ?: 0.06f) * size.height
+            val played = active && (i + 0.5f) / n <= progress
+            drawRoundRect(
+                if (played) color else Palette.textFaint.copy(alpha = 0.35f),
+                topLeft = Offset(i * w + w * 0.18f, (size.height - h) / 2),
+                size = Size(w * 0.64f, h),
+                cornerRadius = CornerRadius(w * 0.32f),
+            )
+        }
+        if (active) {
+            val x = progress * size.width
+            drawLine(Palette.text, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2.dp.toPx())
+        }
+    }
+    if (active) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 22.dp, top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            GlassChip("−5 s", false, { ClipPlayer.skip(-5_000) })
+            Text(
+                "${clipTime(pos.first)} / ${clipTime(pos.second)}",
+                color = Palette.textDim, fontSize = 13.sp, modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+            GlassChip("+5 s", false, { ClipPlayer.skip(5_000) })
         }
     }
 }
+
+/** « 1:05 » */
+private fun clipTime(ms: Int): String { val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60) }
